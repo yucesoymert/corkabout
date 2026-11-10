@@ -24,7 +24,7 @@ export function EditBoard({ id, name, icon, color, t }: { id: string; name: stri
       <button onClick={open} aria-label={fill(t.edit, { name })} title={fill(t.edit, { name })} className={`${TILE_BUTTON} hover:text-neutral-900`}>
         <PencilSimple className="size-4" aria-hidden />
       </button>
-      <dialog ref={dialog} className="m-auto w-full max-w-md rounded-2xl p-6 backdrop:bg-neutral-900/30">
+      <dialog ref={dialog} className="m-auto w-full max-w-md rounded-2xl bg-white p-6 text-neutral-900 backdrop:bg-black/40">
         <h2 className="font-semibold">{t.editTitle}</h2>
         <form
           key={`${name}:${icon}:${color}`}

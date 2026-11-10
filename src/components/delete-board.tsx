@@ -23,7 +23,7 @@ export function DeleteBoard({ id, name, cards, t }: { id: string; name: string; 
       >
         <Trash className="size-4" aria-hidden />
       </button>
-      <dialog ref={dialog} className="m-auto w-full max-w-sm rounded-2xl p-6 backdrop:bg-neutral-900/30">
+      <dialog ref={dialog} className="m-auto w-full max-w-sm rounded-2xl bg-white p-6 text-neutral-900 backdrop:bg-black/40">
         <h2 className="font-semibold">{fill(t.deleteTitle, { name })}</h2>
         <p className="mt-1 text-sm text-neutral-500">{fill(t.deleteBody, { n: cards })}</p>
         <form action={deleteBoardAction.bind(null, id)} className="mt-6 flex justify-end gap-2">

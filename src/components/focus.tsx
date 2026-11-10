@@ -36,7 +36,7 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
           setRevealed((r) => !r);
         }
       }}
-      className="m-0 h-full max-h-none w-full max-w-none flex-col items-center justify-center bg-[#eceef1] p-6 backdrop:bg-transparent open:flex"
+      className="m-0 h-full max-h-none w-full max-w-none flex-col items-center justify-center bg-neutral-100 p-6 backdrop:bg-transparent open:flex"
     >
       <button onClick={() => dialog.current?.close()} aria-label={t.close} title={t.close} className="absolute top-5 right-6 grid size-10 place-items-center rounded-full text-neutral-500 hover:bg-white hover:text-neutral-900">
         <X className="size-6" aria-hidden />
@@ -45,7 +45,7 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
         <>
           <article ref={article} tabIndex={-1} aria-live="polite" className="max-h-[78vh] w-full max-w-[720px] overflow-y-auto rounded-lg bg-white p-8 shadow-[0_8px_30px_rgba(0,0,0,.12)] outline-none sm:p-12">
             {card.tag && <p className="mb-3.5 text-xs tracking-[.08em] text-neutral-500 uppercase">{card.tag}</p>}
-            <h2 className="mb-6 font-serif text-[28px] leading-tight font-bold whitespace-pre-wrap text-[#1e2a3a]">{card.title || untitled}</h2>
+            <h2 className="mb-6 font-serif text-[28px] leading-tight font-bold whitespace-pre-wrap text-ink">{card.title || untitled}</h2>
             {revealed ? (
               <p className="text-[17px] leading-[1.75] whitespace-pre-wrap text-neutral-700">{card.body}</p>
             ) : (
