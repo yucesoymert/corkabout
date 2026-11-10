@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createCardAction, deleteCardAction, renameBoardAction, updateCardAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
-import { fitView, toWorld, zoomAt, type View } from "@/lib/canvas";
+import { fitView, READABLE_ZOOM, toWorld, zoomAt, type View } from "@/lib/canvas";
 import { fill } from "@/lib/format";
 import { Focus } from "./focus";
 
@@ -17,6 +17,8 @@ type T = Dictionary["board"] & { focus: Dictionary["focus"] };
 type Gesture = { kind: "pan" | "move" | "resize"; id?: string; sx: number; sy: number; ox: number; oy: number; ow: number; z: number; moved: boolean };
 
 const CARD_WIDTH = 300;
+const GLIDE = "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)";
+const DOTS_GLIDE = ["background-size", "background-position"].map((p) => GLIDE.replace("transform", p)).join(", ");
 const viewKey = (boardId: string) => `corkspace:view:${boardId}`;
 
 function savedView(boardId: string): View | null {
@@ -41,6 +43,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
   const [editing, setEditing] = useState<{ id: string; field: Field } | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [focusOpen, setFocusOpen] = useState(false);
+  const [glide, setGlide] = useState(false); // animate the camera for jumps (tag, fit, zoom buttons), not for pan/zoom gestures
   const viewport = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const zoomRef = useRef(1);
@@ -59,17 +62,23 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     setCards((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
     call(updateCardAction(id, patch));
   };
-  const fit = () => {
-    const rects = cards.map((c) => ({ x: c.x, y: c.y, w: c.width, h: document.getElementById(`card-${c.id}`)?.offsetHeight ?? 120 }));
-    setView(fitView(rects, innerWidth, innerHeight));
+  const rects = (list: CardData[]) => list.map((c) => ({ x: c.x, y: c.y, w: c.width, h: document.getElementById(`card-${c.id}`)?.offsetHeight ?? 120 }));
+  /** Readable view of these cards: all of them if they fit at READABLE_ZOOM, otherwise their top-left corner. */
+  const readableView = (list: CardData[]) => fitView(rects(list), innerWidth, innerHeight, READABLE_ZOOM);
+  const jump = (next: View) => {
+    setGlide(true);
+    setView(next);
+  };
+  const fit = () => jump(fitView(rects(cards), innerWidth, innerHeight));
+  const pickTag = (tg: string | null) => {
+    setTag(tg);
+    jump(readableView(tg ? cards.filter((c) => c.tag === tg) : cards));
   };
 
-  // Once on mount: the last view of this board, or fit everything in.
+  // Once on mount: the last view of this board, or a readable view of its start.
   useEffect(() => {
-    const saved = savedView(board.id);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage and card heights only exist after hydration
-    if (saved) setView(saved);
-    else fit();
+    setView(savedView(board.id) ?? readableView(cards));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
   }, []);
 
@@ -85,6 +94,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     const el = viewport.current!;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      setGlide(false);
       const k = e.deltaMode === 1 ? 16 : 1; // Firefox mouse wheels report lines
       if (e.ctrlKey || e.metaKey) setView((v) => v && zoomAt(v, e.clientX, e.clientY, v.zoom * Math.exp(-e.deltaY * k * 0.01)));
       else setView((v) => v && { ...v, x: v.x - e.deltaX * k, y: v.y - e.deltaY * k });
@@ -94,6 +104,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     let start = 1;
     const onGestureStart = (e: Event) => {
       e.preventDefault();
+      setGlide(false);
       start = zoomRef.current;
     };
     const onGestureChange = (e: Event) => {
@@ -141,6 +152,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     if (e.button !== 0 && e.button !== 1) return;
     (document.activeElement as HTMLElement | null)?.blur();
     setSelected(null);
+    setGlide(false);
     gesture.current = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: v.x, oy: v.y, ow: 0, z: 0, moved: false };
   };
   const startCard = (e: React.PointerEvent, card: CardData, kind: "move" | "resize") => {
@@ -174,7 +186,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     add(p.x - CARD_WIDTH / 2, p.y - 24);
   };
 
-  const zoomBy = (f: number) => setView(zoomAt(v, innerWidth / 2, innerHeight / 2, v.zoom * f));
+  const zoomBy = (f: number) => jump(zoomAt(v, innerWidth / 2, innerHeight / 2, v.zoom * f));
   const addAtCentre = () => {
     const p = toWorld(v, innerWidth / 2, innerHeight / 2);
     add(p.x - CARD_WIDTH / 2, p.y - 60);
@@ -192,14 +204,14 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
       <div
         ref={viewport}
         className="canvas-dots fixed inset-0 touch-none overflow-hidden select-none"
-        style={{ "--dot": `${dot}px`, "--dot-x": `${v.x % dot}px`, "--dot-y": `${v.y % dot}px` } as React.CSSProperties}
+        style={{ "--dot": `${dot}px`, "--dot-x": `${v.x}px`, "--dot-y": `${v.y}px`, transition: glide ? DOTS_GLIDE : undefined } as React.CSSProperties}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={() => (gesture.current = null)}
         onDoubleClick={onDoubleClick}
       >
-        <div className="absolute top-0 left-0 origin-top-left" style={{ transform: `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`, visibility: view ? undefined : "hidden" }}>
+        <div className="absolute top-0 left-0 origin-top-left" style={{ transform: `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`, transition: glide ? GLIDE : undefined, visibility: view ? undefined : "hidden" }}>
           {cards.map((card) => (
             <CardView
               key={card.id}
@@ -223,8 +235,8 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
         {!cards.length && <p className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-neutral-500">{t.emptyHint}</p>}
       </div>
 
-      <div className="pointer-events-none fixed inset-x-3 top-3 z-10 flex">
-        <div className="pointer-events-auto flex h-9 max-w-full min-w-0 items-center gap-1 rounded-full border border-neutral-200 bg-white/90 px-1 shadow-sm backdrop-blur">
+      <div className="pointer-events-none fixed inset-x-3 top-3 z-10 flex justify-center">
+        <div className="pointer-events-auto flex h-9 max-w-4xl min-w-0 items-center gap-1 rounded-full border border-neutral-200 bg-white/90 px-1 shadow-sm backdrop-blur">
           <Link href={`/${locale}`} aria-label={t.back} title={t.back} className="grid size-7 shrink-0 place-items-center rounded-full text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
             <ArrowLeft className="size-4" aria-hidden />
           </Link>
@@ -240,12 +252,21 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
           {tags.length > 0 && (
             <>
               <span className="mx-1 h-4 w-px shrink-0 bg-neutral-200" aria-hidden />
-              <div role="group" aria-label={t.tags} className="flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none]">
+              <div
+                role="group"
+                aria-label={t.tags}
+                // mouse wheels only scroll vertically; turn that into sideways scrolling of the chips
+                onWheel={(e) => Math.abs(e.deltaY) > Math.abs(e.deltaX) && (e.currentTarget.scrollLeft += e.deltaY)}
+                className="flex min-w-0 gap-0.5 overflow-x-auto px-2 [mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-12px),transparent)] [scrollbar-width:none]"
+              >
                 {[null, ...tags].map((tg) => (
                   <button
                     key={tg ?? ""}
                     aria-pressed={activeTag === tg}
-                    onClick={() => setTag(tg)}
+                    onClick={(e) => {
+                      pickTag(tg);
+                      e.currentTarget.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+                    }}
                     className="shrink-0 rounded-full px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 aria-pressed:bg-neutral-900 aria-pressed:text-white"
                   >
                     {tg ?? t.all}

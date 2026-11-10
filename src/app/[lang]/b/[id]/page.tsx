@@ -8,7 +8,7 @@ import { requireBoard } from "@/lib/auth-guard";
 
 export default function BoardPage({ params }: PageProps<"/[lang]/b/[id]">) {
   return (
-    <Suspense fallback={<div className="fixed inset-0 bg-paper" />}>
+    <Suspense fallback={<BoardSkeleton />}>
       <BoardLoader params={params} />
     </Suspense>
   );
@@ -22,4 +22,26 @@ async function BoardLoader({ params }: { params: PageProps<"/[lang]/b/[id]">["pa
     .from(cards)
     .where(eq(cards.boardId, board.id));
   return <Board board={{ id: board.id, title: board.title }} initialCards={rows} locale={locale} t={{ ...t.board, focus: t.focus }} />;
+}
+
+// Shown right away on navigation (static shell) while the board loads: same top bar spot and a few card ghosts.
+function BoardSkeleton() {
+  const ghosts = [
+    [8, 14, 150],
+    [8, 34, 110],
+    [30, 14, 190],
+    [30, 46, 120],
+    [52, 14, 130],
+    [74, 14, 170],
+  ];
+  return (
+    <div className="canvas-dots fixed inset-0" style={{ "--dot": "24px", "--dot-x": "0px", "--dot-y": "0px" } as React.CSSProperties} aria-busy>
+      <div className="absolute inset-x-3 top-3 flex justify-center">
+        <div className="h-9 w-full max-w-xl animate-pulse rounded-full border border-neutral-200 bg-white/90 shadow-sm" />
+      </div>
+      {ghosts.map(([left, top, height], i) => (
+        <div key={i} className="absolute w-[18%] animate-pulse rounded-md bg-white/80 shadow-[0_1px_3px_rgba(0,0,0,.06)]" style={{ left: `${left}%`, top: `${top}%`, height }} />
+      ))}
+    </div>
+  );
 }

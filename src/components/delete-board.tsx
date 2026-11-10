@@ -5,6 +5,7 @@ import { useRef } from "react";
 import { deleteBoardAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
 import { fill } from "@/lib/format";
+import { PendingButton } from "./pending-button";
 
 // Native <dialog>: focus trap, Esc and backdrop come with showModal().
 export function DeleteBoard({ id, name, cards, t }: { id: string; name: string; cards: number; t: Dictionary["home"] }) {
@@ -26,7 +27,7 @@ export function DeleteBoard({ id, name, cards, t }: { id: string; name: string; 
           <button type="button" onClick={() => dialog.current?.close()} className="rounded-full px-4 py-2 text-sm font-medium hover:bg-neutral-100">
             {t.cancel}
           </button>
-          <button className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">{t.confirmDelete}</button>
+          <PendingButton className="flex items-center gap-1.5 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-70">{t.confirmDelete}</PendingButton>
         </form>
       </dialog>
     </>

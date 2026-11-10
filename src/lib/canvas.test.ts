@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fitView, MAX_ZOOM, MIN_ZOOM, toWorld, zoomAt } from "./canvas";
+import { fitView, MAX_ZOOM, MIN_ZOOM, READABLE_ZOOM, toWorld, zoomAt } from "./canvas";
 
 test("zoomAt keeps the point under the cursor fixed", () => {
   const v = { x: 120, y: -40, zoom: 0.8 };
@@ -27,4 +27,9 @@ test("fitView centres the cards and never zooms past 100%", () => {
   const tall = fitView([{ x: 0, y: 500, w: 300, h: 20000 }], 1000, 800);
   assert.equal(tall.zoom, MIN_ZOOM);
   assert.equal(toWorld(tall, 0, 64).y, 500);
+
+  // With a readable floor the zoom stops there and the board opens at its top-left corner.
+  const readable = fitView([{ x: 100, y: 200, w: 4000, h: 3000 }], 1000, 800, READABLE_ZOOM);
+  assert.equal(readable.zoom, READABLE_ZOOM);
+  assert.deepEqual(toWorld(readable, 64, 64), { x: 100, y: 200 });
 });
