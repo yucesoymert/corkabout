@@ -52,11 +52,11 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
       </button>
       {card ? (
         <>
-          <article ref={article} tabIndex={-1} aria-live="polite" className="max-h-[78vh] w-full max-w-[720px] overflow-y-auto rounded-lg bg-white p-8 shadow-[0_8px_30px_rgba(0,0,0,.12)] outline-none sm:p-12">
+          <article ref={article} tabIndex={-1} aria-live="polite" className="max-h-[70dvh] w-full max-w-[720px] overflow-y-auto rounded-lg bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,.12)] outline-none sm:p-12">
             {card.tag && <p className="mb-3.5 text-xs tracking-[.08em] text-neutral-500 uppercase">{card.tag}</p>}
-            <h2 className="mb-6 font-serif text-[28px] leading-tight font-bold whitespace-pre-wrap text-ink">{card.title || untitled}</h2>
+            <h2 className="mb-5 font-serif text-2xl leading-tight sm:mb-6 sm:text-[28px] font-bold whitespace-pre-wrap text-ink">{card.title || untitled}</h2>
             {revealed ? (
-              <p className="text-[17px] leading-[1.75] whitespace-pre-wrap text-neutral-700">{card.body}</p>
+              <p className="text-base leading-[1.7] whitespace-pre-wrap text-neutral-700 sm:text-[17px] sm:leading-[1.75]">{card.body}</p>
             ) : (
               <button onClick={() => setRevealed(true)} className="w-full rounded-lg border border-dashed border-neutral-400 bg-neutral-50 p-3.5 text-[15px] text-neutral-500 hover:bg-neutral-100">
                 {t.reveal}
@@ -78,7 +78,7 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
               <ArrowRight className="size-5" aria-hidden />
             </button>
           </nav>
-          <p className="absolute bottom-4 text-xs text-neutral-500">{t.hint}</p>
+          <p className="absolute bottom-4 hidden text-xs text-neutral-500 sm:block">{t.hint}</p>
         </>
       ) : (
         <p className="text-neutral-500">{t.empty}</p>

@@ -95,8 +95,8 @@ async function Boards() {
           <li key={b.id} className="group relative">
             <Link href={`/${locale}/b/${b.id}`} className="block rounded-2xl focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-4 focus-visible:ring-offset-paper focus-visible:outline-none">
               <BoardCover icon={icon} color={color} className="transition group-hover:-translate-y-0.5 group-hover:shadow-md" />
-              <p className="mt-2.5 truncate font-medium">{b.title}</p>
-              <p className="text-sm text-neutral-500">
+              <p className="mt-2 truncate text-sm font-medium sm:mt-2.5 sm:text-base">{b.title}</p>
+              <p className="truncate text-xs text-neutral-500 sm:text-sm">
                 {fill(t.home.cards, { n: b.cards })} · {fill(t.home.edited, { date: b.edited.toLocaleDateString(locale, { day: "numeric", month: "short" }) })}
               </p>
             </Link>
