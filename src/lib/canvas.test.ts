@@ -20,6 +20,11 @@ test("fitView centres the cards and never zooms past 100%", () => {
   assert.deepEqual(toWorld(small, 500, 400), { x: 1050, y: 1050 }); // screen centre = card centre
 
   const wide = fitView([{ x: 0, y: 0, w: 300, h: 200 }, { x: 3700, y: 0, w: 300, h: 200 }], 1000, 800);
-  assert.equal(wide.zoom, (1000 - 2 * 80) / 4000); // width-bound: 840 px for a 4000 px wide world
+  assert.equal(wide.zoom, (1000 - 2 * 64) / 4000); // width-bound: 872 px for a 4000 px wide world
   assert.deepEqual(fitView([], 1000, 800), { x: 0, y: 0, zoom: 1 });
+
+  // Too tall even at MIN_ZOOM: the top stays on screen instead of being centred off it.
+  const tall = fitView([{ x: 0, y: 500, w: 300, h: 20000 }], 1000, 800);
+  assert.equal(tall.zoom, MIN_ZOOM);
+  assert.equal(toWorld(tall, 0, 64).y, 500);
 });

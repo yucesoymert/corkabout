@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq, inArray } from "drizzle-orm";
+import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { signOut } from "@/auth";
@@ -47,7 +48,7 @@ export async function renameBoardAction(id: string, title: string) {
 export async function deleteBoardAction(id: string) {
   const board = await requireBoard(id);
   await db.delete(boards).where(eq(boards.id, board.id)); // cards go with it (on delete cascade)
-  redirect("/");
+  refresh(); // only called from the dashboard, so re-render it in place
 }
 
 /** Also used by "undo" after a delete: the client sends the whole card back with its old id. */

@@ -125,6 +125,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     call(deleteCardAction(card.id));
     if (!undoable) return;
     toast(t.deleted, {
+      duration: 8000,
       action: {
         label: t.undo,
         onClick: () => {
@@ -147,7 +148,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     e.stopPropagation();
     if (kind === "move" && editing?.id === card.id && (e.target as HTMLElement).closest("[data-field]")) return; // selecting text
     setSelected(card.id);
-    gesture.current = { kind, id: card.id, sx: e.clientX, sy: e.clientY, ox: card.x, oy: card.y, ow: card.width, z: card.z === maxZ ? card.z : maxZ + 1, moved: false };
+    gesture.current = { kind, id: card.id, sx: e.clientX, sy: e.clientY, ox: card.x, oy: card.y, ow: card.width, z: cards.some((c) => c.id !== card.id && c.z >= card.z) ? maxZ + 1 : card.z, moved: false };
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const g = gesture.current;

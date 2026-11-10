@@ -16,13 +16,15 @@ export function zoomAt(v: View, sx: number, sy: number, zoom: number): View {
   return { zoom: z, x: sx - w.x * z, y: sy - w.y * z };
 }
 
-/** View that centres all rects in a w×h screen, never zoomed in past 100%. */
-export function fitView(rects: Rect[], w: number, h: number, pad = 80): View {
+/** View that centres all rects in a w×h screen, never zoomed in past 100%. If they don't fit even at
+ * MIN_ZOOM, that axis starts at the top-left edge instead, so the start of the board stays on screen. */
+export function fitView(rects: Rect[], w: number, h: number, pad = 64): View {
   if (!rects.length) return { x: 0, y: 0, zoom: 1 };
   const minX = Math.min(...rects.map((r) => r.x));
   const minY = Math.min(...rects.map((r) => r.y));
   const bw = Math.max(...rects.map((r) => r.x + r.w)) - minX;
   const bh = Math.max(...rects.map((r) => r.y + r.h)) - minY;
   const zoom = clampZoom(Math.min((w - 2 * pad) / bw, (h - 2 * pad) / bh, 1));
-  return { zoom, x: (w - bw * zoom) / 2 - minX * zoom, y: (h - bh * zoom) / 2 - minY * zoom };
+  const offset = (screen: number, size: number) => Math.max(pad, (screen - size * zoom) / 2);
+  return { zoom, x: offset(w, bw) - minX * zoom, y: offset(h, bh) - minY * zoom };
 }
