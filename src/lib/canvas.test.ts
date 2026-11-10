@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fitView, GRID, MAX_ZOOM, MIN_ZOOM, READABLE_ZOOM, snap, tidy, toWorld, zoomAt } from "./canvas";
+import { fitView, GRID, masonry, MAX_ZOOM, MIN_ZOOM, READABLE_ZOOM, snap, tagRows, tidy, toWorld, zoomAt } from "./canvas";
 
 test("zoomAt keeps the point under the cursor fixed", () => {
   const v = { x: 120, y: -40, zoom: 0.8 };
@@ -56,4 +56,23 @@ test("tidy stacks each tag in its own column with one grid cell between cards", 
   assert.deepEqual(at.b1, [24 + 288 + GRID, 0]); // next column: widest card A (288) + one cell
   assert.deepEqual(at.b2, [24 + 288 + GRID, 72 + GRID]); // 50 px rounds up to 3 cells
   assert.deepEqual(at.n, [24 + 288 + GRID + 312 + GRID, 0]); // B's widest is 300 → 13 cells; untagged last
+});
+
+const card = (id: string, tag: string | null, x: number, y: number, h = 48) => ({ id, tag, x, y, width: 288, h });
+
+test("tagRows puts each tag on its own row, one cell apart", () => {
+  const at = Object.fromEntries(tagRows([card("a2", "A", 900, 0, 96), card("b1", "B", 0, 500), card("a1", "A", 0, 10, 120)]).map((p) => [p.id, [p.x, p.y]]));
+  assert.deepEqual(at.a1, [0, 0]);
+  assert.deepEqual(at.a2, [288 + GRID, 0]); // left to right, one cell between
+  assert.deepEqual(at.b1, [0, 120 + GRID]); // next row starts under the tallest card of A
+});
+
+test("masonry fills the shortest column in the given order", () => {
+  const list = [card("c", null, 0, 0, 240), card("a", null, 0, 0, 48), card("b", null, 0, 0, 48), card("d", null, 0, 0, 48)];
+  const at = Object.fromEntries(masonry(list, (p, q) => p.id.localeCompare(q.id)).map((p) => [p.id, [p.x, p.y]]));
+  // 4 cards → 2 columns of 288 + one cell
+  assert.deepEqual(at.a, [0, 0]);
+  assert.deepEqual(at.b, [312, 0]);
+  assert.deepEqual(at.c, [0, 48 + GRID]);
+  assert.deepEqual(at.d, [312, 48 + GRID]); // column 2 is shorter than column 1 (which has c)
 });

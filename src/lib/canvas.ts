@@ -57,3 +57,43 @@ export function tidy(cards: Placed[]) {
   }
   return out;
 }
+
+const cellsUp = (n: number) => Math.ceil(n / GRID) * GRID; // round a size up to whole grid cells
+const byTag = (cards: Placed[]) => {
+  const groups = new Map<string, Placed[]>();
+  for (const c of [...cards].sort((a, b) => a.y - b.y || a.x - b.x)) groups.set(c.tag ?? "", [...(groups.get(c.tag ?? "") ?? []), c]);
+  return [...groups.values()];
+};
+
+/** One row per tag (ordered by its topmost card), cards left to right in their current order, one cell apart. */
+export function tagRows(cards: Placed[]) {
+  if (!cards.length) return [];
+  let y = snap(Math.min(...cards.map((c) => c.y)));
+  const left = snap(Math.min(...cards.map((c) => c.x)));
+  const out: { id: string; x: number; y: number }[] = [];
+  for (const row of byTag(cards)) {
+    let x = left;
+    for (const c of row.sort((a, b) => a.x - b.x)) {
+      out.push({ id: c.id, x, y });
+      x += cellsUp(c.width) + GRID;
+    }
+    y += Math.max(...row.map((c) => cellsUp(c.h))) + GRID;
+  }
+  return out;
+}
+
+/** Masonry grid in the given order: each card goes to the shortest column, one cell apart. */
+export function masonry(cards: Placed[], order: (a: Placed, b: Placed) => number) {
+  if (!cards.length) return [];
+  const cols = Math.min(6, Math.ceil(Math.sqrt(cards.length))); // ponytail: column count from the card count, not the screen
+  const colW = cellsUp(Math.max(...cards.map((c) => c.width))) + GRID;
+  const left = snap(Math.min(...cards.map((c) => c.x)));
+  const top = snap(Math.min(...cards.map((c) => c.y)));
+  const bottoms = Array<number>(cols).fill(top);
+  return [...cards].sort(order).map((c) => {
+    const col = bottoms.indexOf(Math.min(...bottoms));
+    const at = { id: c.id, x: left + col * colW, y: bottoms[col] };
+    bottoms[col] += cellsUp(c.h) + GRID;
+    return at;
+  });
+}

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { signOut } from "@/auth";
 import { db } from "@/db";
-import { boards, cards } from "@/db/schema";
+import { boards, cards, users } from "@/db/schema";
 import { requireBoard, requireUser } from "@/lib/auth-guard";
 import { ICON_NAMES, TINT_NAMES } from "@/lib/board-look";
 
@@ -30,6 +30,15 @@ const ownBoards = (userId: string) => db.select({ id: boards.id }).from(boards).
 
 export async function signOutAction() {
   await signOut({ redirectTo: "/" });
+}
+
+/** Settings → profile: the display name (starts as the Google name). */
+export async function updateNameAction(name: string) {
+  const user = await requireUser();
+  const parsed = z.string().trim().min(1).max(80).safeParse(name);
+  if (!parsed.success) return false;
+  await db.update(users).set({ name: parsed.data }).where(eq(users.id, user.id));
+  return true;
 }
 
 export async function createBoardAction(title: string) {
