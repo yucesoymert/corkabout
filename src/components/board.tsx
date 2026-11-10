@@ -8,6 +8,7 @@ import { createCardAction, deleteCardAction, moveCardsAction, renameBoardAction,
 import type { Dictionary } from "@/i18n/tr";
 import { fitView, GRID, READABLE_ZOOM, snap, tidy, toWorld, zoomAt, type View } from "@/lib/canvas";
 import { fill } from "@/lib/format";
+import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
 
 export type CardData = { id: string; title: string; body: string; tag: string | null; x: number; y: number; width: number; z: number };
@@ -43,6 +44,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
   const [editing, setEditing] = useState<{ id: string; field: Field } | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [focusOpen, setFocusOpen] = useState(false);
+  const [composing, setComposing] = useState<{ at?: { x: number; y: number } } | null>(null); // new-card dialog; `at` = double-clicked world point
   const [glide, setGlide] = useState(false); // animate the camera for jumps (tag, fit, zoom buttons), not for pan/zoom gestures
   const viewport = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
@@ -122,12 +124,28 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     };
   }, []);
 
-  const add = (x: number, y: number) => {
-    const card: CardData = { id: crypto.randomUUID(), title: "", body: "", tag: activeTag, x: snap(x), y: snap(y), width: CARD_WIDTH, z: maxZ + 1 };
+  const height = (c: CardData) => document.getElementById(`card-${c.id}`)?.offsetHeight ?? 120;
+  /** Where a new card goes: the double-clicked spot, else under the last card of its tag's column, else the screen centre. */
+  const spotFor = (d: Draft, at?: { x: number; y: number }) => {
+    if (at) return at;
+    const col = d.tag ? cards.filter((c) => c.tag === d.tag) : [];
+    if (col.length) {
+      const last = col.reduce((a, b) => (b.y + height(b) > a.y + height(a) ? b : a));
+      return { x: last.x, y: last.y + height(last) + GRID };
+    }
+    const p = toWorld(v, innerWidth / 2, innerHeight / 2);
+    return { x: p.x - CARD_WIDTH / 2, y: p.y - 4 * GRID };
+  };
+  const add = (d: Draft, at?: { x: number; y: number }) => {
+    const spot = spotFor(d, at);
+    const card: CardData = { id: crypto.randomUUID(), ...d, x: snap(spot.x), y: snap(spot.y), width: CARD_WIDTH, z: maxZ + 1 };
     setCards((cs) => [...cs, card]);
     setSelected(card.id);
-    setEditing({ id: card.id, field: "title" });
     call(createCardAction(board.id, card));
+    // landed off screen (end of a long column): bring it into view
+    const sx = card.x * v.zoom + v.x;
+    const sy = card.y * v.zoom + v.y;
+    if (sx < 0 || sy < 0 || sx > innerWidth - 120 || sy > innerHeight - 120) jump({ ...v, x: innerWidth / 2 - (card.x + card.width / 2) * v.zoom, y: innerHeight / 3 - card.y * v.zoom });
   };
 
   const remove = (card: CardData, undoable = true) => {
@@ -183,7 +201,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
   const onDoubleClick = (e: React.MouseEvent) => {
     if (e.target !== viewport.current) return;
     const p = toWorld(v, e.clientX, e.clientY);
-    add(p.x - CARD_WIDTH / 2, p.y - 24);
+    setComposing({ at: { x: p.x - CARD_WIDTH / 2, y: p.y - GRID } });
   };
 
   const place = (list: { id: string; x: number; y: number }[]) => {
@@ -198,10 +216,6 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     toast(t.tidied, { duration: 8000, action: { label: t.undo, onClick: () => place(before) } });
   };
   const zoomBy = (f: number) => jump(zoomAt(v, innerWidth / 2, innerHeight / 2, v.zoom * f));
-  const addAtCentre = () => {
-    const p = toWorld(v, innerWidth / 2, innerHeight / 2);
-    add(p.x - CARD_WIDTH / 2, p.y - 60);
-  };
   const rename = (value: string) => {
     const next = value.trim();
     if (!next || next === title) return;
@@ -291,7 +305,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
             <Cards className="size-3.5" aria-hidden />
             {t.focusMode}
           </button>
-          <button onClick={addAtCentre} aria-label={t.addCard} title={t.addCard} className="grid size-7 shrink-0 place-items-center rounded-full bg-neutral-900 text-white hover:bg-neutral-700">
+          <button onClick={() => setComposing({})} aria-label={t.addCard} title={t.addCard} className="grid size-7 shrink-0 place-items-center rounded-full bg-neutral-900 text-white hover:bg-neutral-700">
             <Plus weight="bold" className="size-3.5" aria-hidden />
           </button>
         </div>
@@ -313,6 +327,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
         </button>
       </div>
 
+      {composing && <Composer tags={tags} tag={activeTag} t={t} onAdd={(d) => add(d, composing.at)} onClose={() => setComposing(null)} />}
       {focusOpen && <Focus cards={ordered.filter(matches)} t={t.focus} untitled={t.untitledCard} onClose={() => setFocusOpen(false)} />}
     </>
   );
