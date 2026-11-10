@@ -45,7 +45,7 @@ export const tr = {
     all: "Tümü",
     focusMode: "Odak",
     addCard: "Kart ekle",
-    emptyHint: "Kart eklemek için boş alana çift tıkla",
+    emptyHint: "Kart eklemek için + butonuna bas ya da boş alana çift tıkla",
     tagPlaceholder: "Etiket",
     titlePlaceholder: "Başlık",
     bodyPlaceholder: "İçerik",

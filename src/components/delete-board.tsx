@@ -8,7 +8,7 @@ import { fill } from "@/lib/format";
 import { PendingButton } from "./pending-button";
 
 /** Round button on the top-right of a board tile, shown on hover or keyboard focus. */
-export const TILE_BUTTON = "grid size-8 place-items-center rounded-full bg-white/90 text-neutral-500 opacity-0 shadow-sm transition group-hover:opacity-100 focus-visible:opacity-100";
+export const TILE_BUTTON = "grid size-8 place-items-center rounded-full bg-white/90 text-neutral-500 opacity-0 shadow-sm transition group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"; // touch screens have no hover: always shown
 
 // Native <dialog>: focus trap, Esc and backdrop come with showModal().
 export function DeleteBoard({ id, name, cards, t }: { id: string; name: string; cards: number; t: Dictionary["home"] }) {

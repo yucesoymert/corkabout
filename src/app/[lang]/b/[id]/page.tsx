@@ -1,10 +1,14 @@
 import { eq } from "drizzle-orm";
+import type { Viewport } from "next";
 import { Suspense } from "react";
 import { Board } from "@/components/board";
 import { db } from "@/db";
 import { cards } from "@/db/schema";
 import { getDictionary, getLocale } from "@/i18n";
 import { requireBoard, requireUser } from "@/lib/auth-guard";
+
+// The canvas has its own pinch zoom; the browser's page zoom on top of it would fight it (and zoom the top bar).
+export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false };
 
 export default function BoardPage({ params }: PageProps<"/[lang]/b/[id]">) {
   return (

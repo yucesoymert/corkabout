@@ -56,7 +56,8 @@ export function Composer({ tags, tag, t, onAdd, onClose }: { tags: string[]; tag
         <input name="title" maxLength={1_000} placeholder={t.titlePlaceholder} aria-label={t.titlePlaceholder} className={`${field} font-serif text-[17px] font-bold text-ink`} />
         <textarea name="body" rows={7} maxLength={50_000} placeholder={t.bodyPlaceholder} aria-label={t.bodyPlaceholder} className={`${field} resize-y text-sm leading-relaxed`} />
         <div className="flex items-center gap-2">
-          <span className="mr-auto text-xs text-neutral-500">{t.composerHint}</span>
+          <span className="mr-auto hidden text-xs text-neutral-500 sm:inline">{t.composerHint}</span>
+          <span className="mr-auto sm:hidden" />
           <button type="button" onClick={() => dialog.current?.close()} className="rounded-full px-4 py-2 text-sm font-medium hover:bg-neutral-100">
             {t.cancel}
           </button>

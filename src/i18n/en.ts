@@ -46,7 +46,7 @@ export const en: Dictionary = {
     all: "All",
     focusMode: "Focus",
     addCard: "Add card",
-    emptyHint: "Double-click an empty spot to add a card",
+    emptyHint: "Press + or double-click an empty spot to add a card",
     tagPlaceholder: "Tag",
     titlePlaceholder: "Title",
     bodyPlaceholder: "Content",

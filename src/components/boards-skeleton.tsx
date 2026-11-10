@@ -2,7 +2,8 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 
-export const TILE_GRID = "mt-6 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5";
+// Phones: two tiles per row; wider screens: as many 220 px+ tiles as fit.
+export const TILE_GRID = "mt-5 grid grid-cols-2 gap-x-3 gap-y-4 sm:mt-6 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] sm:gap-5";
 
 // The server can't know how many boards are coming, so the dashboard remembers the last count in this browser.
 // ponytail: per browser, not per account; a second account on the same browser sees the first one's count once
