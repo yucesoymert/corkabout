@@ -3,10 +3,12 @@ import { count, desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 import { Suspense } from "react";
 import { BoardCover } from "@/components/board-cover";
+import { BoardsSkeleton, NewBoardForm, RememberBoardCount, TILE_GRID } from "@/components/boards-skeleton";
 import { DeleteBoard } from "@/components/delete-board";
 import { EditBoard } from "@/components/edit-board";
 import { PendingButton } from "@/components/pending-button";
 import { PinnedTitle } from "@/components/pinned-title";
+import { ThemeToggle } from "@/components/theme";
 import { db } from "@/db";
 import { boards, cards } from "@/db/schema";
 import { getDictionary, getLocale, locales } from "@/i18n";
@@ -14,8 +16,6 @@ import { requireUser } from "@/lib/auth-guard";
 import { boardLook } from "@/lib/board-look";
 import { fill } from "@/lib/format";
 import { createBoardAction, signOutAction } from "./actions";
-
-const TILE_GRID = "mt-6 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5";
 
 export default async function HomePage() {
   const [t, locale] = [await getDictionary(), await getLocale()];
@@ -32,6 +32,7 @@ export default async function HomePage() {
             </Link>
           ))}
         </nav>
+        <ThemeToggle label={t.home.theme} />
         <form action={signOutAction}>
           <PendingButton
             aria-label={t.home.signOut}
@@ -45,34 +46,20 @@ export default async function HomePage() {
       <main className="mx-auto mt-4 w-full max-w-6xl px-5 pb-10">
         <div className="flex items-center justify-between gap-4">
           <PinnedTitle text={t.home.title} label={t.home.straighten} />
-          <form action={createBoardAction.bind(null, t.home.untitled)}>
+          <NewBoardForm action={createBoardAction.bind(null, t.home.untitled)}>
             <PendingButton
               icon={<Plus weight="bold" className="size-4" aria-hidden />}
               className="flex items-center gap-1.5 rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-700 active:scale-[0.98] disabled:opacity-70"
             >
               {t.home.newBoard}
             </PendingButton>
-          </form>
+          </NewBoardForm>
         </div>
         <Suspense fallback={<BoardsSkeleton />}>
           <Boards />
         </Suspense>
       </main>
     </>
-  );
-}
-
-function BoardsSkeleton() {
-  return (
-    <ul className={TILE_GRID} aria-hidden>
-      {[0, 1, 2].map((i) => (
-        <li key={i}>
-          <div className="aspect-[4/3] animate-pulse rounded-2xl bg-neutral-200/80" />
-          <div className="mt-3 h-4 w-2/3 animate-pulse rounded bg-neutral-200/80" />
-          <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-neutral-200/60" />
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -89,15 +76,19 @@ async function Boards() {
 
   if (!rows.length) {
     return (
+      <>
+      <RememberBoardCount n={0} />
       <div className="mt-6 rounded-2xl border border-dashed border-neutral-300 bg-white/60 p-12 text-center">
         <p className="font-semibold">{t.home.emptyTitle}</p>
         <p className="mt-1 text-sm text-neutral-500">{t.home.emptyBody}</p>
       </div>
+      </>
     );
   }
 
   return (
     <ul className={TILE_GRID}>
+      <RememberBoardCount n={rows.length} />
       {rows.map((b) => {
         const { icon, color } = boardLook(b);
         return (

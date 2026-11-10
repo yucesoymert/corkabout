@@ -7,30 +7,11 @@ config({ path: ".env.local" });
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { eq } from "drizzle-orm";
+import { layout } from "./layout";
 
 type OldCard = { cat: string; q: string; a: string };
 
-const WIDTH = 288; // 12 grid cells, see GRID in src/lib/canvas.ts
-const GAP = 24;
 const decode = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
-
-// ponytail: card height guessed from text length (~42 chars per line at 300 px); a short guess overlaps, drag to tidy
-const estimateHeight = (c: OldCard) => {
-  const lines = (s: string, perLine: number) => s.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
-  return 40 + 18 + lines(c.q, 32) * 21 + 8 + lines(c.a, 40) * 21;
-};
-
-/** x/y for every card: categories become columns, cards stack in their original order. */
-function layout(old: OldCard[]) {
-  const cats = [...new Set(old.map((c) => c.cat))];
-  const bottoms = cats.map(() => 0);
-  return old.map((c) => {
-    const col = cats.indexOf(c.cat);
-    const y = bottoms[col];
-    bottoms[col] += Math.ceil((estimateHeight(c) + GAP) / GAP) * GAP; // stays on the grid
-    return { tag: c.cat, title: decode(c.q), body: decode(c.a), x: col * (WIDTH + 2 * GAP), y, width: WIDTH, z: 0 };
-  });
-}
 
 async function main() {
   const { db } = await import("../src/db"); // after dotenv, so DATABASE_URL is set
@@ -48,7 +29,8 @@ async function main() {
   const old: OldCard[] = new Function(`return ${src}`)(); // our own file, not user input
 
   const [board] = await db.insert(boards).values({ userId: user.id, title: "Interview" }).returning();
-  await db.insert(cards).values(layout(old).map((c) => ({ ...c, id: crypto.randomUUID(), boardId: board.id })));
+  const list = old.map((c) => ({ tag: c.cat, title: decode(c.q), body: decode(c.a) }));
+  await db.insert(cards).values(layout(list).map((c) => ({ ...c, id: crypto.randomUUID(), boardId: board.id })));
   console.log(`Board ${board.id}: ${old.length} cards`);
   process.exit(0);
 }

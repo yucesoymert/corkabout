@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
+/* Dark mode = `dark` class on <html>, set before paint by the script in [lang]/layout.tsx (system setting or the toggle). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-paper: #f4f3f0;
   --color-cork: #a8754a;
+  --color-ink: #1e2a3a; /* card titles */
+  --color-dot: #d6d2ca; /* canvas dot grid */
   /* Tailwind's #737373 gives 4.27:1 on paper; this passes WCAG AA (4.66:1). Same fix as garage. */
   --color-neutral-500: #6d6d6d;
   --font-sans: var(--font-geist-sans);
@@ -10,10 +15,32 @@
   --font-serif: ui-serif, Georgia, "Times New Roman", serif;
 }
 
+/* ponytail: dark mode flips the neutral scale and white instead of adding dark: to every class, so
+ * bg-white surfaces, neutral text and the black buttons (bg-neutral-900 text-white) all invert together.
+ * Colours that must stay put use black/red/the tints directly. */
+.dark {
+  color-scheme: dark;
+  --color-paper: #141413;
+  --color-white: #201f1e;
+  --color-ink: #ece9e3;
+  --color-dot: #34322f;
+  --color-neutral-50: #1a1918;
+  --color-neutral-100: #262524;
+  --color-neutral-200: #33312f;
+  --color-neutral-300: #45433f;
+  --color-neutral-400: #75726c;
+  --color-neutral-500: #a3a09a; /* 7.2:1 on paper */
+  --color-neutral-600: #bab7b0;
+  --color-neutral-700: #d2cfc8;
+  --color-neutral-800: #e3e0da;
+  --color-neutral-900: #f1eee9;
+  --color-neutral-950: #faf8f4;
+}
+
 /* Dot grid of the board canvas; size and offset follow pan/zoom through these variables. */
 .canvas-dots {
   background-color: var(--color-paper);
-  background-image: radial-gradient(circle, #d6d2ca 1px, transparent 1.2px);
+  background-image: radial-gradient(circle, var(--color-dot) 1px, transparent 1.2px);
   background-size: var(--dot) var(--dot);
   background-position: var(--dot-x) var(--dot-y);
 }
