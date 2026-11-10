@@ -35,3 +35,25 @@ export function fitView(rects: Rect[], w: number, h: number, minZoom = MIN_ZOOM,
   const offset = (screen: number, size: number) => Math.max(pad, (screen - size * zoom) / 2);
   return { zoom, x: offset(w, bw) - minX * zoom, y: offset(h, bh) - minY * zoom };
 }
+
+export type Placed = { id: string; tag: string | null; x: number; y: number; width: number; h: number };
+
+/** "Tidy": one column per tag (ordered by its leftmost card, untagged cards form their own column), cards top to
+ * bottom in their current order, exactly one grid cell between neighbours. Starts at the board's top-left card. */
+export function tidy(cards: Placed[]) {
+  if (!cards.length) return [];
+  const cols = new Map<string, Placed[]>();
+  for (const c of [...cards].sort((a, b) => a.x - b.x || a.y - b.y)) cols.set(c.tag ?? "", [...(cols.get(c.tag ?? "") ?? []), c]);
+  const top = snap(Math.min(...cards.map((c) => c.y)));
+  let x = snap(Math.min(...cards.map((c) => c.x)));
+  const out: { id: string; x: number; y: number }[] = [];
+  for (const col of cols.values()) {
+    let y = top;
+    for (const c of col.sort((a, b) => a.y - b.y)) {
+      out.push({ id: c.id, x, y });
+      y += Math.ceil(c.h / GRID) * GRID + GRID;
+    }
+    x += Math.ceil(Math.max(...col.map((c) => c.width)) / GRID) * GRID + GRID;
+  }
+  return out;
+}

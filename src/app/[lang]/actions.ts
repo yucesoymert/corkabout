@@ -85,6 +85,20 @@ export async function updateCardAction(id: string, patch: Partial<z.input<typeof
   return rows.length > 0;
 }
 
+const moves = z.array(z.object({ id: z.uuid(), x: coord, y: coord })).max(5_000);
+
+/** "Tidy" and its undo: many positions at once, in one transaction, only for cards of this board. */
+export async function moveCardsAction(boardId: string, list: z.input<typeof moves>) {
+  const board = await requireBoard(boardId);
+  const parsed = moves.safeParse(list);
+  if (!parsed.success) return false;
+  // ponytail: one UPDATE per card; fine for hundreds of cards, use UPDATE ... FROM (VALUES ...) past that
+  await db.transaction(async (tx) => {
+    for (const m of parsed.data) await tx.update(cards).set({ x: m.x, y: m.y }).where(and(eq(cards.id, m.id), eq(cards.boardId, board.id)));
+  });
+  return true;
+}
+
 export async function deleteCardAction(id: string) {
   const user = await requireUser();
   if (!z.uuid().safeParse(id).success) return false;

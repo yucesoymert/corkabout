@@ -1,12 +1,12 @@
 "use client";
 
-import { ArrowLeft, Cards, Minus, Plus } from "@phosphor-icons/react";
+import { ArrowLeft, Cards, Columns, Minus, Plus } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { createCardAction, deleteCardAction, renameBoardAction, updateCardAction } from "@/app/[lang]/actions";
+import { createCardAction, deleteCardAction, moveCardsAction, renameBoardAction, updateCardAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
-import { fitView, GRID, READABLE_ZOOM, snap, toWorld, zoomAt, type View } from "@/lib/canvas";
+import { fitView, GRID, READABLE_ZOOM, snap, tidy, toWorld, zoomAt, type View } from "@/lib/canvas";
 import { fill } from "@/lib/format";
 import { Focus } from "./focus";
 
@@ -186,6 +186,17 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     add(p.x - CARD_WIDTH / 2, p.y - 24);
   };
 
+  const place = (list: { id: string; x: number; y: number }[]) => {
+    const at = new Map(list.map((m) => [m.id, m]));
+    setCards((cs) => cs.map((c) => (at.has(c.id) ? { ...c, ...at.get(c.id) } : c)));
+    call(moveCardsAction(board.id, list));
+  };
+  const arrange = () => {
+    const before = cards.map(({ id, x, y }) => ({ id, x, y }));
+    const after = tidy(rects(cards).map((r, i) => ({ ...r, id: cards[i].id, tag: cards[i].tag, width: cards[i].width })));
+    place(after);
+    toast(t.tidied, { duration: 8000, action: { label: t.undo, onClick: () => place(before) } });
+  };
   const zoomBy = (f: number) => jump(zoomAt(v, innerWidth / 2, innerHeight / 2, v.zoom * f));
   const addAtCentre = () => {
     const p = toWorld(v, innerWidth / 2, innerHeight / 2);
@@ -287,6 +298,10 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
       </div>
 
       <div className="fixed right-3 bottom-3 z-10 flex h-9 items-center rounded-full border border-neutral-200 bg-white/90 px-1 text-neutral-600 shadow-sm backdrop-blur">
+        <button onClick={arrange} disabled={!cards.length} aria-label={t.tidy} title={t.tidy} className="grid size-7 place-items-center rounded-full hover:bg-neutral-100 disabled:opacity-40">
+          <Columns className="size-3.5" aria-hidden />
+        </button>
+        <span className="mx-0.5 h-4 w-px bg-neutral-200" aria-hidden />
         <button onClick={() => zoomBy(1 / 1.25)} aria-label={t.zoomOut} title={t.zoomOut} className="grid size-7 place-items-center rounded-full hover:bg-neutral-100">
           <Minus className="size-3.5" aria-hidden />
         </button>
@@ -332,6 +347,16 @@ function CardView({
   onDone: (empty: boolean) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+
+  // The card box is always a whole number of grid cells tall, so stacked cards leave exactly one cell between them.
+  useEffect(() => {
+    const ro = new ResizeObserver(() => {
+      if (root.current && inner.current) root.current.style.height = `${Math.ceil(inner.current.offsetHeight / GRID) * GRID}px`;
+    });
+    ro.observe(inner.current!);
+    return () => ro.disconnect();
+  }, []);
   const editing = editingField !== null;
   const fieldEl = (f: Field) => root.current?.querySelector<HTMLElement>(`[data-field=${f}]`);
 
@@ -390,8 +415,8 @@ function CardView({
       aria-label={fill(t.card, { title: card.title || t.untitledCard })}
       aria-description={t.cardHelp}
       style={{ left: card.x, top: card.y, width: card.width, zIndex: card.z }}
-      className={`absolute rounded-md bg-white px-4.5 pt-4 pb-5 transition-[box-shadow,opacity] outline-none ${
-        selected ? "shadow-lg ring-2 ring-cork" : "shadow-[0_1px_3px_rgba(0,0,0,.08)] hover:shadow-md"
+      className={`absolute rounded-md bg-white transition-[box-shadow,opacity] outline-none ${
+        selected ? "shadow-lg ring-2 ring-cork" : "shadow-[0_1px_3px_rgba(0,0,0,.08)] hover:shadow-md dark:ring-1 dark:ring-neutral-200"
       } ${dim ? "opacity-20" : ""} ${editing ? "" : "cursor-grab active:cursor-grabbing"}`}
       onPointerDown={(e) => onPointerDown(e, "move")}
       onFocus={(e) => e.target === e.currentTarget && onSelect()}
@@ -419,9 +444,11 @@ function CardView({
         }
       }}
     >
+      <div ref={inner} className="px-4.5 pt-4 pb-5">
       {text("tag", card.tag ?? "", "mb-1.5 text-[10px] font-medium tracking-[.08em] text-neutral-500 uppercase", t.tagPlaceholder)}
-      {text("title", card.title, "font-serif text-[15px] leading-snug font-bold text-[#1e2a3a]", t.titlePlaceholder)}
+      {text("title", card.title, "font-serif text-[15px] leading-snug font-bold text-ink", t.titlePlaceholder)}
       {text("body", card.body, "mt-2 text-[13px] leading-relaxed text-neutral-700", t.bodyPlaceholder)}
+      </div>
       <div aria-hidden title={t.resize} onPointerDown={(e) => onPointerDown(e, "resize")} className="absolute top-0 -right-1.5 h-full w-3 cursor-ew-resize" />
     </div>
   );

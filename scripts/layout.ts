@@ -1,4 +1,5 @@
-// Card placement for the seed scripts: one column per tag, cards stacked in the order given.
+// Card placement for the seed scripts: one column per tag, cards stacked in the order given, one grid cell apart.
+// Heights are guesses here; the board's "arrange" button re-stacks them with the real heights.
 export type SeedCard = { tag: string; title: string; body: string };
 
 const WIDTH = 288; // 12 grid cells, see GRID in src/lib/canvas.ts
@@ -17,7 +18,7 @@ export function layout(list: SeedCard[]) {
   return list.map((c) => {
     const col = tags.indexOf(c.tag);
     const y = bottoms[col];
-    bottoms[col] += Math.ceil((estimateHeight(c) + GAP) / GAP) * GAP; // stays on the grid
-    return { ...c, x: col * (WIDTH + 2 * GAP), y, width: WIDTH, z: 0 };
+    bottoms[col] += Math.ceil(estimateHeight(c) / GAP) * GAP + GAP; // stays on the grid
+    return { ...c, x: col * (WIDTH + GAP), y, width: WIDTH, z: 0 };
   });
 }

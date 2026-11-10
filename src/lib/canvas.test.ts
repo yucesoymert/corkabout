@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fitView, GRID, MAX_ZOOM, MIN_ZOOM, READABLE_ZOOM, snap, toWorld, zoomAt } from "./canvas";
+import { fitView, GRID, MAX_ZOOM, MIN_ZOOM, READABLE_ZOOM, snap, tidy, toWorld, zoomAt } from "./canvas";
 
 test("zoomAt keeps the point under the cursor fixed", () => {
   const v = { x: 120, y: -40, zoom: 0.8 };
@@ -40,4 +40,20 @@ test("snap rounds to the nearest dot, negatives too", () => {
   assert.equal(snap(GRID / 2 + 1), GRID);
   assert.equal(snap(-GRID - 5), -GRID);
   assert.equal(snap(301), 312);
+});
+
+test("tidy stacks each tag in its own column with one grid cell between cards", () => {
+  const out = tidy([
+    { id: "b2", tag: "B", x: 900, y: 500, width: 288, h: 96 },
+    { id: "a1", tag: "A", x: 30, y: 10, width: 288, h: 120 },
+    { id: "b1", tag: "B", x: 1000, y: 20, width: 300, h: 50 },
+    { id: "a2", tag: "A", x: 400, y: 700, width: 288, h: 72 },
+    { id: "n", tag: null, x: 2000, y: 0, width: 288, h: 48 },
+  ]);
+  const at = Object.fromEntries(out.map((p) => [p.id, [p.x, p.y]]));
+  assert.deepEqual(at.a1, [24, 0]); // starts on the grid at the top-left card
+  assert.deepEqual(at.a2, [24, 120 + GRID]); // 120 = 5 cells, then one empty cell
+  assert.deepEqual(at.b1, [24 + 288 + GRID, 0]); // next column: widest card A (288) + one cell
+  assert.deepEqual(at.b2, [24 + 288 + GRID, 72 + GRID]); // 50 px rounds up to 3 cells
+  assert.deepEqual(at.n, [24 + 288 + GRID + 312 + GRID, 0]); // B's widest is 300 → 13 cells; untagged last
 });
