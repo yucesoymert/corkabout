@@ -1,20 +1,22 @@
 "use client";
 
-import { ArrowLeft, Cards, Columns, Minus, Plus } from "@phosphor-icons/react";
+import { ArrowLeft, Cards, Minus, Plus } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createCardAction, deleteCardAction, moveCardsAction, renameBoardAction, updateCardAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
-import { fitView, GRID, READABLE_ZOOM, snap, tidy, toWorld, zoomAt, type View } from "@/lib/canvas";
+import type { Locale } from "@/i18n/locales";
+import { fitView, GRID, masonry, READABLE_ZOOM, snap, tagRows, tidy, toWorld, zoomAt, type Placed, type View } from "@/lib/canvas";
 import { fill } from "@/lib/format";
+import { type Account, type Arrangement, BoardMenu } from "./board-menu";
 import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
 
 export type CardData = { id: string; title: string; body: string; tag: string | null; x: number; y: number; width: number; z: number };
 type Field = "tag" | "title" | "body";
 type Patch = Partial<Omit<CardData, "id">>;
-type T = Dictionary["board"] & { focus: Dictionary["focus"] };
+type T = Dictionary["board"] & { focus: Dictionary["focus"]; menu: Dictionary["menu"] };
 type Gesture = { kind: "pan" | "move" | "resize"; id?: string; sx: number; sy: number; ox: number; oy: number; ow: number; z: number; moved: boolean };
 
 const CARD_WIDTH = 12 * GRID;
@@ -36,7 +38,21 @@ const patchFor = (g: Gesture, dx: number, dy: number, zoom: number): Patch =>
     ? { x: snap(g.ox + dx / zoom), y: snap(g.oy + dy / zoom), z: g.z }
     : { width: Math.min(50 * GRID, Math.max(7 * GRID, snap(g.ox + g.ow + dx / zoom) - g.ox)) }; // right edge on a dot
 
-export function Board({ board, initialCards, locale, t }: { board: { id: string; title: string }; initialCards: CardData[]; locale: string; t: T }) {
+export function Board({
+  board,
+  initialCards,
+  locale,
+  account,
+  languages,
+  t,
+}: {
+  board: { id: string; title: string };
+  initialCards: CardData[];
+  locale: Locale;
+  account: Account;
+  languages: Record<Locale, string>;
+  t: T;
+}) {
   const [cards, setCards] = useState(initialCards);
   const [title, setTitle] = useState(board.title);
   const [view, setView] = useState<View | null>(null); // null until the saved view is read (localStorage is client-only)
@@ -209,9 +225,18 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     setCards((cs) => cs.map((c) => (at.has(c.id) ? { ...c, ...at.get(c.id) } : c)));
     call(moveCardsAction(board.id, list));
   };
-  const arrange = () => {
+  const LAYOUTS: Record<Arrangement, (list: Placed[]) => { id: string; x: number; y: number }[]> = {
+    tagColumns: tidy,
+    tagRows,
+    gridByTag: (list) => masonry(list, (a, b) => (a.tag ?? "\uffff").localeCompare(b.tag ?? "\uffff", locale) || a.y - b.y || a.x - b.x),
+    gridByTitle: (list) => {
+      const title = new Map(cards.map((c) => [c.id, c.title]));
+      return masonry(list, (a, b) => title.get(a.id)!.localeCompare(title.get(b.id)!, locale));
+    },
+  };
+  const arrange = (kind: Arrangement) => {
     const before = cards.map(({ id, x, y }) => ({ id, x, y }));
-    const after = tidy(rects(cards).map((r, i) => ({ ...r, id: cards[i].id, tag: cards[i].tag, width: cards[i].width })));
+    const after = LAYOUTS[kind](rects(cards).map((r, i) => ({ ...r, id: cards[i].id, tag: cards[i].tag, width: cards[i].width })));
     place(after);
     toast(t.tidied, { duration: 8000, action: { label: t.undo, onClick: () => place(before) } });
   };
@@ -260,7 +285,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
         {!cards.length && <p className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-neutral-500">{t.emptyHint}</p>}
       </div>
 
-      <div className="pointer-events-none fixed inset-x-3 top-3 z-10 flex justify-center">
+      <div className="pointer-events-none fixed inset-x-14 top-3 z-10 flex justify-center">
         <div className="pointer-events-auto flex h-9 max-w-4xl min-w-0 items-center gap-1 rounded-full border border-neutral-200 bg-white/90 px-1 shadow-sm backdrop-blur">
           <Link href={`/${locale}`} aria-label={t.back} title={t.back} className="grid size-7 shrink-0 place-items-center rounded-full text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
             <ArrowLeft className="size-4" aria-hidden />
@@ -312,11 +337,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
       </div>
 
       <div className="fixed right-3 bottom-3 z-10 flex h-9 items-center rounded-full border border-neutral-200 bg-white/90 px-1 text-neutral-600 shadow-sm backdrop-blur">
-        <button onClick={arrange} disabled={!cards.length} aria-label={t.tidy} title={t.tidy} className="grid size-7 place-items-center rounded-full hover:bg-neutral-100 disabled:opacity-40">
-          <Columns className="size-3.5" aria-hidden />
-        </button>
-        <span className="mx-0.5 h-4 w-px bg-neutral-200" aria-hidden />
-        <button onClick={() => zoomBy(1 / 1.25)} aria-label={t.zoomOut} title={t.zoomOut} className="grid size-7 place-items-center rounded-full hover:bg-neutral-100">
+<button onClick={() => zoomBy(1 / 1.25)} aria-label={t.zoomOut} title={t.zoomOut} className="grid size-7 place-items-center rounded-full hover:bg-neutral-100">
           <Minus className="size-3.5" aria-hidden />
         </button>
         <button onClick={fit} aria-label={t.fit} title={t.fit} className="h-7 w-12 rounded-full text-xs tabular-nums hover:bg-neutral-100">
@@ -327,6 +348,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
         </button>
       </div>
 
+      <BoardMenu account={account} boardId={board.id} locale={locale} languages={languages} t={t.menu} onArrange={arrange} />
       {composing && <Composer tags={tags} tag={activeTag} t={t} onAdd={(d) => add(d, composing.at)} onClose={() => setComposing(null)} />}
       {focusOpen && <Focus cards={ordered.filter(matches)} t={t.focus} untitled={t.untitledCard} onClose={() => setFocusOpen(false)} />}
     </>
