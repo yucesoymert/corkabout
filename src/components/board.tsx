@@ -1,14 +1,15 @@
 "use client";
 
-import { ArrowLeft, Cards, Minus, Plus } from "@phosphor-icons/react";
+import { ArrowLeft, Cards, Minus, Plus, SpeakerHigh, Stop } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { createCardAction, deleteCardAction, moveCardsAction, renameBoardAction, updateCardAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
 import type { Locale } from "@/i18n/locales";
 import { fitView, GRID, masonry, READABLE_ZOOM, snap, tagRows, tidy, toWorld, zoomAt, type Placed, type View } from "@/lib/canvas";
 import { fill } from "@/lib/format";
+import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
 import { type Account, type Arrangement, BoardMenu } from "./board-menu";
 import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
@@ -106,6 +107,8 @@ export function Board({
     const h = setTimeout(() => localStorage.setItem(viewKey(board.id), JSON.stringify(view)), 300);
     return () => clearTimeout(h);
   }, [view, board.id]);
+
+  useEffect(() => stop, []); // leaving the board stops reading
 
   // Wheel = pan, ⌘/Ctrl+wheel and trackpad pinch = zoom. Native listeners: React's wheel listener is passive (can't preventDefault).
   useEffect(() => {
@@ -355,6 +358,9 @@ export function Board({
   );
 }
 
+/** Title then body; a title without end punctuation gets a full stop so it is read as its own sentence. */
+export const readable = (c: { title: string; body: string }) => [c.title && (/[.!?…:]$/.test(c.title.trim()) ? c.title : `${c.title}.`), c.body].filter(Boolean).join(" ");
+
 const MOVES: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 const NEXT_FIELD: Partial<Record<Field, Field>> = { tag: "title", title: "body" };
 
@@ -384,6 +390,7 @@ function CardView({
   onDone: (empty: boolean) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
+  const reading = useSyncExternalStore(subscribeSpeech, speakingKey, () => null) === card.id;
   const inner = useRef<HTMLDivElement>(null);
 
   // The card box is always a whole number of grid cells tall, so stacked cards leave exactly one cell between them.
@@ -452,7 +459,7 @@ function CardView({
       aria-label={fill(t.card, { title: card.title || t.untitledCard })}
       aria-description={t.cardHelp}
       style={{ left: card.x, top: card.y, width: card.width, zIndex: card.z }}
-      className={`absolute rounded-md bg-white transition-[box-shadow,opacity] outline-none ${
+      className={`group absolute rounded-md bg-white transition-[box-shadow,opacity] outline-none ${
         selected ? "shadow-lg ring-2 ring-cork" : "shadow-[0_1px_3px_rgba(0,0,0,.08)] hover:shadow-md dark:ring-1 dark:ring-neutral-200"
       } ${dim ? "opacity-20" : ""} ${editing ? "" : "cursor-grab active:cursor-grabbing"}`}
       onPointerDown={(e) => onPointerDown(e, "move")}
@@ -482,10 +489,24 @@ function CardView({
       }}
     >
       <div ref={inner} className="px-4.5 pt-4 pb-5">
-      {text("tag", card.tag ?? "", "mb-1.5 text-[10px] font-medium tracking-[.08em] text-neutral-500 uppercase", t.tagPlaceholder)}
-      {text("title", card.title, "font-serif text-[15px] leading-snug font-bold text-ink", t.titlePlaceholder)}
+      {text("tag", card.tag ?? "", "mb-1.5 pr-5 text-[10px] font-medium tracking-[.08em] text-neutral-500 uppercase", t.tagPlaceholder)}
+      {text("title", card.title, "pr-5 font-serif text-[15px] leading-snug font-bold text-ink", t.titlePlaceholder)}
       {text("body", card.body, "mt-2 text-[13px] leading-relaxed text-neutral-700", t.bodyPlaceholder)}
       </div>
+      {(card.title || card.body) && (
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onClick={() => speak(card.id, readable(card))}
+          aria-label={reading ? t.stopReading : t.read}
+          title={reading ? t.stopReading : t.read}
+          className={`absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-white text-neutral-500 shadow-sm ring-1 ring-neutral-200 transition hover:text-neutral-900 focus-visible:opacity-100 ${
+            reading ? "text-cork opacity-100" : selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+        >
+          {reading ? <Stop weight="fill" className="size-3" aria-hidden /> : <SpeakerHigh className="size-3" aria-hidden />}
+        </button>
+      )}
       <div aria-hidden title={t.resize} onPointerDown={(e) => onPointerDown(e, "resize")} className="absolute top-0 -right-1.5 h-full w-3 cursor-ew-resize" />
     </div>
   );
