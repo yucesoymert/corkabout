@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createCardAction, deleteCardAction, renameBoardAction, updateCardAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
-import { fitView, READABLE_ZOOM, toWorld, zoomAt, type View } from "@/lib/canvas";
+import { fitView, GRID, READABLE_ZOOM, snap, toWorld, zoomAt, type View } from "@/lib/canvas";
 import { fill } from "@/lib/format";
 import { Focus } from "./focus";
 
@@ -16,7 +16,7 @@ type Patch = Partial<Omit<CardData, "id">>;
 type T = Dictionary["board"] & { focus: Dictionary["focus"] };
 type Gesture = { kind: "pan" | "move" | "resize"; id?: string; sx: number; sy: number; ox: number; oy: number; ow: number; z: number; moved: boolean };
 
-const CARD_WIDTH = 300;
+const CARD_WIDTH = 12 * GRID;
 const GLIDE = "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)";
 const DOTS_GLIDE = ["background-size", "background-position"].map((p) => GLIDE.replace("transform", p)).join(", ");
 const viewKey = (boardId: string) => `corkspace:view:${boardId}`;
@@ -32,8 +32,8 @@ function savedView(boardId: string): View | null {
 
 const patchFor = (g: Gesture, dx: number, dy: number, zoom: number): Patch =>
   g.kind === "move"
-    ? { x: Math.round(g.ox + dx / zoom), y: Math.round(g.oy + dy / zoom), z: g.z }
-    : { width: Math.round(Math.min(1200, Math.max(160, g.ow + dx / zoom))) };
+    ? { x: snap(g.ox + dx / zoom), y: snap(g.oy + dy / zoom), z: g.z }
+    : { width: Math.min(50 * GRID, Math.max(7 * GRID, snap(g.ox + g.ow + dx / zoom) - g.ox)) }; // right edge on a dot
 
 export function Board({ board, initialCards, locale, t }: { board: { id: string; title: string }; initialCards: CardData[]; locale: string; t: T }) {
   const [cards, setCards] = useState(initialCards);
@@ -123,7 +123,7 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
   }, []);
 
   const add = (x: number, y: number) => {
-    const card: CardData = { id: crypto.randomUUID(), title: "", body: "", tag: activeTag, x: Math.round(x), y: Math.round(y), width: CARD_WIDTH, z: maxZ + 1 };
+    const card: CardData = { id: crypto.randomUUID(), title: "", body: "", tag: activeTag, x: snap(x), y: snap(y), width: CARD_WIDTH, z: maxZ + 1 };
     setCards((cs) => [...cs, card]);
     setSelected(card.id);
     setEditing({ id: card.id, field: "title" });
@@ -198,13 +198,13 @@ export function Board({ board, initialCards, locale, t }: { board: { id: string;
     call(renameBoardAction(board.id, next));
   };
 
-  const dot = 24 * v.zoom;
+  const dot = GRID * v.zoom; // each dot sits in the middle of its tile, hence the half-tile offset below
   return (
     <>
       <div
         ref={viewport}
         className="canvas-dots fixed inset-0 touch-none overflow-hidden select-none"
-        style={{ "--dot": `${dot}px`, "--dot-x": `${v.x}px`, "--dot-y": `${v.y}px`, transition: glide ? DOTS_GLIDE : undefined } as React.CSSProperties}
+        style={{ "--dot": `${dot}px`, "--dot-x": `${v.x - dot / 2}px`, "--dot-y": `${v.y - dot / 2}px`, transition: glide ? DOTS_GLIDE : undefined } as React.CSSProperties}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -414,8 +414,8 @@ function CardView({
           onRemove();
         } else if (move) {
           e.preventDefault();
-          const step = e.shiftKey ? 50 : 10;
-          onSave({ x: card.x + move[0] * step, y: card.y + move[1] * step });
+          const step = e.shiftKey ? 4 * GRID : GRID;
+          onSave({ x: snap(card.x) + move[0] * step, y: snap(card.y) + move[1] * step });
         }
       }}
     >

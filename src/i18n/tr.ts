@@ -24,6 +24,18 @@ export const tr = {
     confirmDelete: "Sil",
     cancel: "Vazgeç",
     signOut: "Çıkış yap",
+    edit: "{name} boardunu düzenle",
+    editTitle: "Boardu düzenle",
+    name: "Ad",
+    color: "Renk",
+    icon: "İkon",
+    save: "Kaydet",
+    straighten: "Harfleri düzelt",
+    colors: { sky: "Gök mavisi", sage: "Adaçayı", peach: "Şeftali", lavender: "Lavanta", rose: "Gül", butter: "Tereyağı", teal: "Camgöbeği" },
+    icons: {
+      book: "Kitap", brain: "Beyin", briefcase: "Çanta", coffee: "Kahve", compass: "Pusula", globe: "Dünya", leaf: "Yaprak", lightbulb: "Ampul",
+      music: "Müzik", notebook: "Defter", palette: "Palet", planet: "Gezegen", puzzle: "Yapboz", rocket: "Roket", sparkle: "Parıltı", translate: "Çeviri",
+    },
   },
   board: {
     back: "Boardlara dön",

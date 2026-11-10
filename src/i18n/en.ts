@@ -25,6 +25,18 @@ export const en: Dictionary = {
     confirmDelete: "Delete",
     cancel: "Cancel",
     signOut: "Sign out",
+    edit: "Edit board {name}",
+    editTitle: "Edit board",
+    name: "Name",
+    color: "Colour",
+    icon: "Icon",
+    save: "Save",
+    straighten: "Straighten the letters",
+    colors: { sky: "Sky", sage: "Sage", peach: "Peach", lavender: "Lavender", rose: "Rose", butter: "Butter", teal: "Teal" },
+    icons: {
+      book: "Book", brain: "Brain", briefcase: "Briefcase", coffee: "Coffee", compass: "Compass", globe: "Globe", leaf: "Leaf", lightbulb: "Light bulb",
+      music: "Music", notebook: "Notebook", palette: "Palette", planet: "Planet", puzzle: "Puzzle", rocket: "Rocket", sparkle: "Sparkle", translate: "Translate",
+    },
   },
   board: {
     back: "Back to boards",

@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 
 type OldCard = { cat: string; q: string; a: string };
 
-const WIDTH = 300;
+const WIDTH = 288; // 12 grid cells, see GRID in src/lib/canvas.ts
 const GAP = 24;
 const decode = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
 
@@ -27,7 +27,7 @@ function layout(old: OldCard[]) {
   return old.map((c) => {
     const col = cats.indexOf(c.cat);
     const y = bottoms[col];
-    bottoms[col] += estimateHeight(c) + GAP;
+    bottoms[col] += Math.ceil((estimateHeight(c) + GAP) / GAP) * GAP; // stays on the grid
     return { tag: c.cat, title: decode(c.q), body: decode(c.a), x: col * (WIDTH + 2 * GAP), y, width: WIDTH, z: 0 };
   });
 }

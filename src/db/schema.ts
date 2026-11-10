@@ -42,6 +42,8 @@ export const boards = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    icon: text("icon"), // cover icon and tint names from src/lib/board-look.ts; null = picked from the id
+    color: text("color"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: updatedAt(),
   },

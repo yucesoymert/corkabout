@@ -8,6 +8,7 @@ import { signOut } from "@/auth";
 import { db } from "@/db";
 import { boards, cards } from "@/db/schema";
 import { requireBoard, requireUser } from "@/lib/auth-guard";
+import { ICON_NAMES, TINT_NAMES } from "@/lib/board-look";
 
 // Session + validation at the trust boundary. Card actions return false instead of throwing,
 // the board shows a "couldn't save" toast and keeps the local state.
@@ -43,6 +44,17 @@ export async function renameBoardAction(id: string, title: string) {
   if (!parsed.success) return false;
   await db.update(boards).set({ title: parsed.data }).where(eq(boards.id, board.id));
   return true;
+}
+
+const boardCover = z.object({ title: boardTitle, icon: z.enum(ICON_NAMES), color: z.enum(TINT_NAMES) });
+
+/** Edit dialog on the dashboard: name, cover icon and tint. */
+export async function editBoardAction(id: string, fd: FormData) {
+  const board = await requireBoard(id);
+  const parsed = boardCover.safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return;
+  await db.update(boards).set(parsed.data).where(eq(boards.id, board.id));
+  refresh();
 }
 
 export async function deleteBoardAction(id: string) {

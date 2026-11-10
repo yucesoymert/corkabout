@@ -1,51 +1,19 @@
-import {
-  BookOpenText,
-  Brain,
-  Briefcase,
-  Coffee,
-  Compass,
-  Globe,
-  Leaf,
-  Lightbulb,
-  MusicNotes,
-  Notebook,
-  Palette,
-  Planet,
-  Plus,
-  PuzzlePiece,
-  Rocket,
-  SignOut,
-  Sparkle,
-  Translate,
-} from "@phosphor-icons/react/dist/ssr";
+import { Plus, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { count, desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 import { Suspense } from "react";
+import { BoardCover } from "@/components/board-cover";
 import { DeleteBoard } from "@/components/delete-board";
+import { EditBoard } from "@/components/edit-board";
 import { PendingButton } from "@/components/pending-button";
+import { PinnedTitle } from "@/components/pinned-title";
 import { db } from "@/db";
 import { boards, cards } from "@/db/schema";
 import { getDictionary, getLocale, locales } from "@/i18n";
 import { requireUser } from "@/lib/auth-guard";
+import { boardLook } from "@/lib/board-look";
 import { fill } from "@/lib/format";
 import { createBoardAction, signOutAction } from "./actions";
-
-// A board without its own picture gets an icon and a tint picked from its id: random per board, the same on every visit.
-// ponytail: no icon/photo column yet; add one (and a picker) when boards can choose their own
-const ICONS = [BookOpenText, Brain, Briefcase, Coffee, Compass, Globe, Leaf, Lightbulb, MusicNotes, Notebook, Palette, Planet, PuzzlePiece, Rocket, Sparkle, Translate];
-const TINTS = [
-  { bg: "#dbe7f3", fg: "#3d6a99" }, // sky
-  { bg: "#dde9dc", fg: "#4a7a4f" }, // sage
-  { bg: "#f6dfcf", fg: "#a5592f" }, // peach
-  { bg: "#e5def3", fg: "#6a4f9c" }, // lavender
-  { bg: "#f3dbe0", fg: "#a2445b" }, // rose
-  { bg: "#f2e8c4", fg: "#8a6d1c" }, // butter
-  { bg: "#d5ebe8", fg: "#2f7a72" }, // teal
-];
-const boardLook = (id: string) => {
-  const n = parseInt(id.slice(0, 8), 16); // uuid v4: these hex digits are random
-  return { Icon: ICONS[n % ICONS.length], tint: TINTS[Math.floor(n / ICONS.length) % TINTS.length] };
-};
 
 const TILE_GRID = "mt-6 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5";
 
@@ -53,7 +21,7 @@ export default async function HomePage() {
   const [t, locale] = [await getDictionary(), await getLocale()];
   return (
     <>
-      <header className="flex h-14 items-center gap-3 px-4 sm:px-5">
+      <header className="flex h-16 items-center gap-3 px-6 sm:px-8">
         {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG */}
         <img src="/icon.svg" alt="" className="size-7" />
         <span className="mr-auto font-semibold tracking-tight">Corkspace</span>
@@ -76,7 +44,7 @@ export default async function HomePage() {
 
       <main className="mx-auto mt-4 w-full max-w-6xl px-5 pb-10">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold tracking-tight">{t.home.title}</h1>
+          <PinnedTitle text={t.home.title} label={t.home.straighten} />
           <form action={createBoardAction.bind(null, t.home.untitled)}>
             <PendingButton
               icon={<Plus weight="bold" className="size-4" aria-hidden />}
@@ -112,7 +80,7 @@ async function Boards() {
   const [user, t, locale] = [await requireUser(), await getDictionary(), await getLocale()];
   const edited = sql<Date>`greatest(${boards.updatedAt}, max(${cards.updatedAt}))`.mapWith(boards.updatedAt);
   const rows = await db
-    .select({ id: boards.id, title: boards.title, cards: count(cards.id), edited })
+    .select({ id: boards.id, title: boards.title, icon: boards.icon, color: boards.color, cards: count(cards.id), edited })
     .from(boards)
     .leftJoin(cards, eq(cards.boardId, boards.id))
     .where(eq(boards.userId, user.id))
@@ -131,25 +99,20 @@ async function Boards() {
   return (
     <ul className={TILE_GRID}>
       {rows.map((b) => {
-        const { Icon, tint } = boardLook(b.id);
+        const { icon, color } = boardLook(b);
         return (
           <li key={b.id} className="group relative">
             <Link href={`/${locale}/b/${b.id}`} className="block rounded-2xl focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-4 focus-visible:ring-offset-paper focus-visible:outline-none">
-              <div
-                className="grid aspect-[4/3] place-items-center rounded-2xl shadow-sm ring-1 ring-black/5 transition group-hover:-translate-y-0.5 group-hover:shadow-md"
-                style={{ backgroundColor: tint.bg, color: tint.fg }}
-                aria-hidden
-              >
-                <span className="grid size-16 place-items-center rounded-2xl bg-white/70 shadow-sm">
-                  <Icon weight="duotone" className="size-8" />
-                </span>
-              </div>
+              <BoardCover icon={icon} color={color} className="transition group-hover:-translate-y-0.5 group-hover:shadow-md" />
               <p className="mt-2.5 truncate font-medium">{b.title}</p>
               <p className="text-sm text-neutral-500">
                 {fill(t.home.cards, { n: b.cards })} · {fill(t.home.edited, { date: b.edited.toLocaleDateString(locale, { day: "numeric", month: "short" }) })}
               </p>
             </Link>
-            <DeleteBoard id={b.id} cards={b.cards} name={b.title} t={t.home} />
+            <div className="absolute top-2 right-2 flex gap-1.5">
+              <EditBoard id={b.id} name={b.title} icon={icon} color={color} t={t.home} />
+              <DeleteBoard id={b.id} cards={b.cards} name={b.title} t={t.home} />
+            </div>
           </li>
         );
       })}

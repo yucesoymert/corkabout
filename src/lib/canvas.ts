@@ -16,8 +16,12 @@ export function zoomAt(v: View, sx: number, sy: number, zoom: number): View {
   return { zoom: z, x: sx - w.x * z, y: sy - w.y * z };
 }
 
-/** Zoom floor for opening a board or jumping to a tag: below this the text is too small to read. */
-export const READABLE_ZOOM = 0.8;
+/** Zoom floor for opening a board or jumping to a tag: below this the text gets too small to read. */
+export const READABLE_ZOOM = 0.65;
+
+/** World pixels between the canvas dots; card corners and widths snap to it. */
+export const GRID = 24;
+export const snap = (n: number) => Math.round(n / GRID) * GRID;
 
 /** View that centres all rects in a w×h screen, never zoomed in past 100% or out past minZoom. If they
  * don't fit at minZoom, that axis starts at the top-left edge instead, so the start of the board stays on screen. */

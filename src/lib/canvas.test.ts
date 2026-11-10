@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fitView, MAX_ZOOM, MIN_ZOOM, READABLE_ZOOM, toWorld, zoomAt } from "./canvas";
+import { fitView, GRID, MAX_ZOOM, MIN_ZOOM, READABLE_ZOOM, snap, toWorld, zoomAt } from "./canvas";
 
 test("zoomAt keeps the point under the cursor fixed", () => {
   const v = { x: 120, y: -40, zoom: 0.8 };
@@ -32,4 +32,12 @@ test("fitView centres the cards and never zooms past 100%", () => {
   const readable = fitView([{ x: 100, y: 200, w: 4000, h: 3000 }], 1000, 800, READABLE_ZOOM);
   assert.equal(readable.zoom, READABLE_ZOOM);
   assert.deepEqual(toWorld(readable, 64, 64), { x: 100, y: 200 });
+});
+
+test("snap rounds to the nearest dot, negatives too", () => {
+  assert.equal(snap(0), 0);
+  assert.equal(snap(GRID / 2 - 1), 0);
+  assert.equal(snap(GRID / 2 + 1), GRID);
+  assert.equal(snap(-GRID - 5), -GRID);
+  assert.equal(snap(301), 312);
 });

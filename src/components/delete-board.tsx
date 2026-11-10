@@ -7,6 +7,9 @@ import type { Dictionary } from "@/i18n/tr";
 import { fill } from "@/lib/format";
 import { PendingButton } from "./pending-button";
 
+/** Round button on the top-right of a board tile, shown on hover or keyboard focus. */
+export const TILE_BUTTON = "grid size-8 place-items-center rounded-full bg-white/90 text-neutral-500 opacity-0 shadow-sm transition group-hover:opacity-100 focus-visible:opacity-100";
+
 // Native <dialog>: focus trap, Esc and backdrop come with showModal().
 export function DeleteBoard({ id, name, cards, t }: { id: string; name: string; cards: number; t: Dictionary["home"] }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -16,7 +19,7 @@ export function DeleteBoard({ id, name, cards, t }: { id: string; name: string; 
         onClick={() => dialog.current?.showModal()}
         aria-label={fill(t.delete, { name })}
         title={fill(t.delete, { name })}
-        className="absolute top-2 right-2 grid size-8 place-items-center rounded-full bg-white/90 text-neutral-500 opacity-0 shadow-sm transition group-hover:opacity-100 hover:text-red-600 focus-visible:opacity-100"
+        className={`${TILE_BUTTON} hover:text-red-600`}
       >
         <Trash className="size-4" aria-hidden />
       </button>
