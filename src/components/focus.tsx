@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, X } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, SpeakerHigh, Stop, X } from "@phosphor-icons/react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Dictionary } from "@/i18n/tr";
+import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
 import type { CardData } from "./board";
 
 // Flashcard mode from the old interview page: title first, Space shows the body. Native <dialog> gives Esc and the focus trap.
@@ -12,6 +13,9 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
   const [i, setI] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const card = cards[i];
+  const speaking = useSyncExternalStore(subscribeSpeech, speakingKey, () => null)?.startsWith("focus:") ?? false;
+  // L reads what is on screen: the question, or the answer once it is revealed.
+  const listen = () => card && speak(`focus:${card.id}:${revealed}`, revealed ? card.body || card.title : card.title);
 
   useEffect(() => {
     dialog.current?.showModal();
@@ -19,6 +23,7 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
   }, []);
 
   const go = (d: number) => {
+    stop();
     setI((n) => (n + d + cards.length) % cards.length);
     setRevealed(false);
   };
@@ -26,15 +31,19 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
   return (
     <dialog
       ref={dialog}
-      onClose={onClose}
+      onClose={() => {
+        stop();
+        onClose();
+      }}
       onKeyDown={(e) => {
         if (!card) return;
         if (e.key === "ArrowRight") go(1);
         else if (e.key === "ArrowLeft") go(-1);
         else if (e.key === " ") {
           e.preventDefault();
+          stop();
           setRevealed((r) => !r);
-        }
+        } else if (e.key === "l" || e.key === "L") listen();
       }}
       className="m-0 h-full max-h-none w-full max-w-none flex-col items-center justify-center bg-neutral-100 p-6 backdrop:bg-transparent open:flex"
     >
@@ -57,6 +66,10 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
           <nav className="mt-6 flex items-center gap-5">
             <button onClick={() => go(-1)} aria-label={t.prev} className="grid size-11 place-items-center rounded-full border border-neutral-300 bg-white hover:bg-neutral-50">
               <ArrowLeft className="size-5" aria-hidden />
+            </button>
+            <button onClick={listen} aria-label={speaking ? t.stop : t.listen} title={speaking ? t.stop : t.listen} className="flex h-11 items-center gap-2 rounded-full border border-neutral-300 bg-white px-4 text-sm hover:bg-neutral-50">
+              {speaking ? <Stop weight="fill" className="size-4 text-cork" aria-hidden /> : <SpeakerHigh className="size-4" aria-hidden />}
+              {speaking ? t.stop : t.listen}
             </button>
             <span className="min-w-16 text-center text-sm text-neutral-500 tabular-nums">
               {i + 1} / {cards.length}
