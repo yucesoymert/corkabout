@@ -10,7 +10,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "test": "node --import tsx --test 'src/**/*.test.ts'",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "import-board": "tsx scripts/import-board.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
