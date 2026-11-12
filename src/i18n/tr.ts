@@ -56,6 +56,7 @@ export const tr = {
     resize: "Genişliği değiştir",
     read: "Sesli oku",
     stopReading: "Okumayı durdur",
+    delete: "Sil",
     deleted: "Kart silindi",
     undo: "Geri al",
     saveFailed: "Kaydedilemedi. Bağlantını kontrol edip tekrar dene.",
