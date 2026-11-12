@@ -15,6 +15,13 @@
       "when": 1794326480178,
       "tag": "0001_yielding_layla_miller",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794506362126,
+      "tag": "0002_married_solo",
+      "breakpoints": true
     }
   ]
 }
