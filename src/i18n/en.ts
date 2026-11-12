@@ -57,6 +57,7 @@ export const en: Dictionary = {
     resize: "Change width",
     read: "Read aloud",
     stopReading: "Stop reading",
+    delete: "Delete",
     deleted: "Card deleted",
     undo: "Undo",
     saveFailed: "Couldn't save. Check your connection and try again.",

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Cards, Minus, Plus, SpeakerHigh, Stop } from "@phosphor-icons/react";
+import { ArrowLeft, Cards, Minus, Plus, SpeakerHigh, Stop, Trash } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
@@ -13,6 +13,7 @@ import { fill } from "@/lib/format";
 import { MAX_CARDS } from "@/lib/limits";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
 import { type Account, type Arrangement, BoardMenu } from "./board-menu";
+import { CardMenu } from "./card-menu";
 import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
 
@@ -77,6 +78,8 @@ export function Board({
   const [tag, setTag] = useState<string | null>(null);
   const [focusOpen, setFocusOpen] = useState(false);
   const [composing, setComposing] = useState<{ at?: { x: number; y: number } } | null>(null); // new-card dialog; `at` = double-clicked world point
+  const [menu, setMenu] = useState<{ x: number; y: number; card: CardData } | null>(null); // right-click menu
+  const menuOpen = useRef(false);
   const [glide, setGlide] = useState(false); // animate the camera for jumps (tag, fit, zoom buttons), not for pan/zoom gestures
   const viewport = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
@@ -135,11 +138,16 @@ export function Board({
 
   useEffect(() => stop, []); // leaving the board stops reading
 
+  useEffect(() => {
+    menuOpen.current = menu !== null;
+  }, [menu]);
+
   // Wheel = pan, ⌘/Ctrl+wheel and trackpad pinch = zoom. Native listeners: React's wheel listener is passive (can't preventDefault).
   useEffect(() => {
     const el = viewport.current!;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (menuOpen.current) return; // the right-click menu stays put next to its card
       setGlide(false);
       const k = e.deltaMode === 1 ? 16 : 1; // Firefox mouse wheels report lines
       if (e.ctrlKey || e.metaKey) setView((v) => v && zoomAt(v, e.clientX, e.clientY, v.zoom * Math.exp(-e.deltaY * k * 0.01)));
@@ -155,6 +163,7 @@ export function Board({
     };
     const onGestureChange = (e: Event) => {
       e.preventDefault();
+      if (menuOpen.current) return;
       const g = e as Gesture;
       setView((v) => v && zoomAt(v, g.clientX, g.clientY, start * g.scale));
     };
@@ -328,7 +337,7 @@ export function Board({
   const LAYOUTS: Record<Arrangement, (list: Placed[]) => { id: string; x: number; y: number }[]> = {
     tagColumns: tidy,
     tagRows,
-    gridByTag: (list) => masonry(list, (a, b) => (a.tag ?? "\uffff").localeCompare(b.tag ?? "\uffff", locale) || a.y - b.y || a.x - b.x),
+    gridByTag: (list) => masonry(list, (a, b) => (a.tag ?? "\uffff").localeCompare(b.tag ?? "\uffff", locale) || a.y - b.y || a.x - b.x, (c) => c.tag ?? ""),
     gridByTitle: (list) => {
       const title = new Map(cards.map((c) => [c.id, c.title]));
       return masonry(list, (a, b) => title.get(a.id)!.localeCompare(title.get(b.id)!, locale));
@@ -398,6 +407,10 @@ export function Board({
               onPointerDown={(e, kind) => startCard(e, card, kind)}
               onEdit={(field) => setEditing({ id: card.id, field })}
               onSelect={() => setSelected(card.id)}
+              onMenu={(x, y) => {
+                setSelected(card.id);
+                setMenu({ x, y, card });
+              }}
               onSave={(patch) => save(card.id, patch)}
               onRemove={() => remove(card)}
               onDone={(empty) => {
@@ -463,6 +476,7 @@ export function Board({
       </div>
 
       <BoardMenu account={account} boardId={board.id} locale={locale} languages={languages} t={t.menu} onArrange={arrange} />
+      {menu && <CardMenu at={menu} items={[{ label: t.delete, Icon: Trash, hint: "⌫", danger: true, onSelect: () => remove(menu.card) }]} onClose={() => setMenu(null)} />}
       {composing && <Composer tags={tags} tag={activeTag} t={t} onAdd={(d) => add(d, composing.at)} onClose={() => setComposing(null)} />}
       {focusOpen && <Focus cards={ordered.filter(matches)} t={t.focus} untitled={t.untitledCard} onClose={() => setFocusOpen(false)} />}
     </>
@@ -484,6 +498,7 @@ function CardView({
   onPointerDown,
   onEdit,
   onSelect,
+  onMenu,
   onSave,
   onRemove,
   onDone,
@@ -496,6 +511,7 @@ function CardView({
   onPointerDown: (e: React.PointerEvent, kind: "move" | "resize") => void;
   onEdit: (field: Field) => void;
   onSelect: () => void;
+  onMenu: (x: number, y: number) => void;
   onSave: (patch: Patch) => void;
   onRemove: () => void;
   onDone: (empty: boolean) => void;
@@ -574,6 +590,12 @@ function CardView({
         selected ? "shadow-lg ring-2 ring-cork" : "shadow-[0_1px_3px_rgba(0,0,0,.08)] hover:shadow-md dark:ring-1 dark:ring-neutral-200"
       } ${dim ? "opacity-20" : ""} ${editing ? "" : "cursor-grab active:cursor-grabbing"}`}
       onPointerDown={(e) => onPointerDown(e, "move")}
+      onContextMenu={(e) => {
+        if (editing && (e.target as HTMLElement).closest("[data-field]")) return; // the browser's menu while typing (copy, paste, spelling)
+        e.preventDefault();
+        if ((e.nativeEvent as PointerEvent).pointerType === "touch") return; // Android long-press: that is hold-to-move
+        onMenu(e.clientX, e.clientY);
+      }}
       onFocus={(e) => e.target === e.currentTarget && onSelect()}
       onDoubleClick={(e) => {
         e.stopPropagation();
