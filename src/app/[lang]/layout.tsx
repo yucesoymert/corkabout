@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemedToaster } from "@/components/theme";
-import { getDictionary, locales } from "@/i18n";
+import { getDictionary, getLocale, locales } from "@/i18n";
 import "../globals.css";
 
 // Runs in <head> before paint: the saved choice (ThemeToggle), else the system setting. No flash of the wrong theme.
@@ -13,8 +13,14 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin",
 export const generateStaticParams = () => locales.map((lang) => ({ lang }));
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { meta } = await getDictionary();
-  return { ...meta, icons: { icon: "/icon.svg" } };
+  const [meta, locale] = [(await getDictionary()).meta, await getLocale()];
+  return {
+    ...meta,
+    metadataBase: new URL("https://corkabout.mertyucesoy.dev"),
+    icons: { icon: "/icon.svg" },
+    openGraph: { ...meta, siteName: "Corkabout", type: "website", locale: locale === "tr" ? "tr_TR" : "en_US" },
+    twitter: { card: "summary", ...meta },
+  };
 }
 
 export const viewport: Viewport = {

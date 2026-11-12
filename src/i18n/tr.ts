@@ -1,12 +1,12 @@
 // Source dictionary. en.ts must match this shape (enforced by the Dictionary type).
 export const tr = {
   meta: {
-    title: "Corkspace",
-    description: "Kartlarını sınırsız bir panoya diz: notlar, dil çalışması, mülakat hazırlığı, ilham.",
+    title: "Corkabout",
+    description: "Kartlarını sonsuz bir panoya iğnele, istediğin gibi diz. Notlar, dil çalışması, mülakat hazırlığı ve ilham için ücretsiz görsel kart panosu.",
   },
   language: { tr: "Türkçe", en: "English" },
   login: {
-    title: "Corkspace'e hoş geldin",
+    title: "Corkabout'a hoş geldin",
     body: "Kartlarını sınırsız bir panoya diz, istediğin yere taşı. Devam etmek için Google hesabınla giriş yap.",
     google: "Google ile giriş yap",
   },

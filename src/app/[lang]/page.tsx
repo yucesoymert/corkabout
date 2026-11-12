@@ -24,7 +24,7 @@ export default async function HomePage() {
       <header className="flex h-16 items-center gap-3 px-6 sm:px-8">
         {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG */}
         <img src="/icon.svg" alt="" className="size-7" />
-        <span className="mr-auto font-semibold tracking-tight">Corkspace</span>
+        <span className="mr-auto font-semibold tracking-tight">Corkabout</span>
         <nav className="flex gap-3 text-sm text-neutral-500">
           {locales.map((l) => (
             <Link key={l} href={`/${l}`} aria-current={l === locale ? "page" : undefined} className="hover:text-neutral-900 aria-[current=page]:font-semibold aria-[current=page]:text-neutral-900">

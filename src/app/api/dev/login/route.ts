@@ -3,10 +3,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
 
-const TEST_EMAIL = "test@corkspace.test";
+const TEST_EMAIL = "test@corkabout.test";
 
 // Dev-only sign-in as the seeded test user, so screens can be checked without a real Google account.
-// Hard 404 unless `next dev` on localhost. Setup: pnpm seed --email test@corkspace.test --create-user
+// Hard 404 unless `next dev` on localhost. Setup: pnpm seed --email test@corkabout.test --create-user
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   if (process.env.NODE_ENV !== "development" || !["localhost", "127.0.0.1"].includes(url.hostname)) {

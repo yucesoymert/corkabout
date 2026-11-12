@@ -2,12 +2,12 @@ import type { Dictionary } from "./tr";
 
 export const en: Dictionary = {
   meta: {
-    title: "Corkspace",
-    description: "Pin your cards on an endless board: notes, language study, interview prep, inspiration.",
+    title: "Corkabout",
+    description: "Pin your cards on an endless board and arrange them your way. A free visual card board for notes, language study, interview prep and inspiration.",
   },
   language: { tr: "Türkçe", en: "English" },
   login: {
-    title: "Welcome to Corkspace",
+    title: "Welcome to Corkabout",
     body: "Pin your cards on an endless board and move them anywhere. Sign in with your Google account to continue.",
     google: "Sign in with Google",
   },
