@@ -15,6 +15,7 @@ import { getDictionary, getLocale, locales } from "@/i18n";
 import { requireUser } from "@/lib/auth-guard";
 import { boardLook } from "@/lib/board-look";
 import { fill } from "@/lib/format";
+import { MAX_BOARDS } from "@/lib/limits";
 import { createBoardAction, signOutAction } from "./actions";
 
 export default async function HomePage() {
@@ -87,6 +88,8 @@ async function Boards() {
   }
 
   return (
+    <>
+    {rows.length >= MAX_BOARDS && <p className="mt-6 text-sm text-neutral-500">{fill(t.home.boardLimit, { n: MAX_BOARDS })}</p>}
     <ul className={TILE_GRID}>
       <RememberBoardCount n={rows.length} />
       {rows.map((b) => {
@@ -108,5 +111,6 @@ async function Boards() {
         );
       })}
     </ul>
+    </>
   );
 }
