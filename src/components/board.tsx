@@ -574,7 +574,7 @@ export function Board({
             const list = membersOf(g.id);
             if (!list.length) return null; // every card left or was deleted; the row stays for undo
             const left = Math.min(...list.map((c) => c.x)) - GRID;
-            const top = Math.min(...list.map((c) => c.y)) - 2 * GRID;
+            const top = Math.min(...list.map((c) => c.y)) - GRID;
             const right = Math.max(...list.map((c) => c.x + c.width)) + GRID;
             const bottom = Math.max(...list.map((c) => c.y + height(c))) + GRID;
             const on = list.every((c) => selected.has(c.id));
@@ -603,7 +603,7 @@ export function Board({
                     renameGroup(g.id, e.currentTarget.value);
                   }}
                   onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && e.currentTarget.blur()}
-                  className="absolute top-3 left-3 w-[calc(100%-1.5rem)] cursor-text bg-transparent text-sm font-semibold text-neutral-700 outline-none placeholder:font-normal placeholder:text-neutral-400 focus:text-neutral-900"
+                  className="absolute bottom-full left-1 mb-1 w-[calc(100%-0.5rem)] cursor-text bg-transparent text-sm font-medium text-neutral-500 outline-none placeholder:font-normal placeholder:text-neutral-400/60 focus:text-neutral-800"
                 />
               </div>
             );
