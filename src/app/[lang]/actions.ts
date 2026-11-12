@@ -78,13 +78,15 @@ export async function deleteBoardAction(id: string) {
   refresh(); // only called from the dashboard, so re-render it in place
 }
 
-/** Also used by "undo" after a delete: the client sends the whole card back with its old id. "limit" = MAX_CARDS reached. */
-export async function createCardAction(boardId: string, card: z.input<typeof newCard>): Promise<boolean | "limit"> {
+const newCards = z.array(newCard).min(1).max(500);
+
+/** New cards, duplicates, and "undo" after a delete (the client sends the cards back with their old ids). "limit" = MAX_CARDS reached. */
+export async function createCardsAction(boardId: string, list: z.input<typeof newCards>): Promise<boolean | "limit"> {
   const board = await requireBoard(boardId);
-  const parsed = newCard.safeParse(card);
+  const parsed = newCards.safeParse(list);
   if (!parsed.success) return false;
-  if ((await cardCount(board.userId)) >= MAX_CARDS) return "limit";
-  await db.insert(cards).values({ ...parsed.data, boardId: board.id }).onConflictDoNothing();
+  if ((await cardCount(board.userId)) + parsed.data.length > MAX_CARDS) return "limit";
+  await db.insert(cards).values(parsed.data.map((c) => ({ ...c, boardId: board.id }))).onConflictDoNothing();
   return true;
 }
 
@@ -101,7 +103,7 @@ export async function updateCardAction(id: string, patch: Partial<z.input<typeof
   return rows.length > 0;
 }
 
-const moves = z.array(z.object({ id: z.uuid(), x: coord, y: coord })).max(5_000);
+const moves = z.array(z.object({ id: z.uuid(), x: coord, y: coord, z: cardFields.shape.z.optional() })).max(5_000);
 
 /** "Tidy" and its undo: many positions at once, in one transaction, only for cards of this board. */
 export async function moveCardsAction(boardId: string, list: z.input<typeof moves>) {
@@ -110,14 +112,17 @@ export async function moveCardsAction(boardId: string, list: z.input<typeof move
   if (!parsed.success) return false;
   // ponytail: one UPDATE per card; fine for hundreds of cards, use UPDATE ... FROM (VALUES ...) past that
   await db.transaction(async (tx) => {
-    for (const m of parsed.data) await tx.update(cards).set({ x: m.x, y: m.y }).where(and(eq(cards.id, m.id), eq(cards.boardId, board.id)));
+    for (const { id, ...pos } of parsed.data) await tx.update(cards).set(pos).where(and(eq(cards.id, id), eq(cards.boardId, board.id)));
   });
   return true;
 }
 
-export async function deleteCardAction(id: string) {
-  const user = await requireUser();
-  if (!z.uuid().safeParse(id).success) return false;
-  await db.delete(cards).where(and(eq(cards.id, id), inArray(cards.boardId, ownBoards(user.id))));
+const ids = z.array(z.uuid()).min(1).max(5_000);
+
+export async function deleteCardsAction(boardId: string, list: string[]) {
+  const board = await requireBoard(boardId);
+  const parsed = ids.safeParse(list);
+  if (!parsed.success) return false;
+  await db.delete(cards).where(and(inArray(cards.id, parsed.data), eq(cards.boardId, board.id)));
   return true;
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import { ArrowLeft, Cards, Minus, Plus, SpeakerHigh, Stop, Trash } from "@phosphor-icons/react";
+import { ArrowLeft, Cards, Copy, Minus, PencilSimple, Plus, SpeakerHigh, Stop, Trash } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import { createCardAction, deleteCardAction, moveCardsAction, renameBoardAction, updateCardAction } from "@/app/[lang]/actions";
+import { createCardsAction, deleteCardsAction, moveCardsAction, renameBoardAction, updateCardAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
 import type { Locale } from "@/i18n/locales";
 import { clampZoom, fitView, GRID, masonry, READABLE_ZOOM, snap, tagRows, tidy, toWorld, zoomAt, type Placed, type View } from "@/lib/canvas";
@@ -13,7 +13,7 @@ import { fill } from "@/lib/format";
 import { MAX_CARDS } from "@/lib/limits";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
 import { type Account, type Arrangement, BoardMenu } from "./board-menu";
-import { CardMenu } from "./card-menu";
+import { CardMenu, type MenuItem } from "./card-menu";
 import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
 
@@ -22,7 +22,7 @@ type Field = "tag" | "title" | "body";
 type Patch = Partial<Omit<CardData, "id">>;
 type T = Dictionary["board"] & { focus: Dictionary["focus"]; menu: Dictionary["menu"] };
 type Gesture = {
-  kind: "pan" | "move" | "resize";
+  kind: "pan" | "move" | "resize" | "marquee";
   id?: string;
   sx: number;
   sy: number;
@@ -33,7 +33,13 @@ type Gesture = {
   moved: boolean;
   hold?: Gesture; // touch on a card: pans unless the finger stays still long enough, then becomes this card move
   tap?: { id: string; field: Field; wasSelected: boolean }; // touch: a second tap on a selected card edits it
+  group?: Map<string, { x: number; y: number; z: number }>; // moving several selected cards: where each one started, its new z
+  collapse?: string; // plain click on a card of a multi-selection: select only it, unless the click became a drag
+  base?: Set<string>; // marquee: what was selected before (shift/⌘ adds to it)
+  boxes?: { id: string; x: number; y: number; w: number; h: number }[]; // marquee: card rects, measured once
 };
+const additive = (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => e.shiftKey || e.metaKey || e.ctrlKey;
+const typing = (el: EventTarget | null) => el instanceof HTMLElement && (el.isContentEditable || el.matches("input, textarea, select"));
 const HOLD_MS = 350;
 
 const CARD_WIDTH = 12 * GRID;
@@ -73,12 +79,14 @@ export function Board({
   const [cards, setCards] = useState(initialCards);
   const [title, setTitle] = useState(board.title);
   const [view, setView] = useState<View | null>(null); // null until the saved view is read (localStorage is client-only)
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<{ id: string; field: Field } | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [focusOpen, setFocusOpen] = useState(false);
   const [composing, setComposing] = useState<{ at?: { x: number; y: number } } | null>(null); // new-card dialog; `at` = double-clicked world point
-  const [menu, setMenu] = useState<{ x: number; y: number; card: CardData } | null>(null); // right-click menu
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null); // right-click menu, acts on the selection
+  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null); // marquee, screen pixels
+  const [spaceHeld, setSpaceHeld] = useState(false); // Space + drag pans, like design tools
   const menuOpen = useRef(false);
   const [glide, setGlide] = useState(false); // animate the camera for jumps (tag, fit, zoom buttons), not for pan/zoom gestures
   const viewport = useRef<HTMLDivElement>(null);
@@ -94,15 +102,17 @@ export function Board({
   const activeTag = tag && tags.includes(tag) ? tag : null;
   const matches = (c: CardData) => !activeTag || c.tag === activeTag;
   const maxZ = Math.max(0, ...cards.map((c) => c.z));
+  const picked = cards.filter((c) => selected.has(c.id));
   const v = view ?? { x: 0, y: 0, zoom: 1 };
 
   const failed = () => toast.error(t.saveFailed);
   const call = (p: Promise<boolean>) => p.then((ok) => ok || failed(), failed);
-  /** Optimistic insert; at the card limit the card is taken back off the board. */
-  const insert = (card: CardData) =>
-    createCardAction(board.id, card).then((ok) => {
+  /** Optimistic insert; at the card limit the cards are taken back off the board. */
+  const insert = (list: CardData[]) =>
+    createCardsAction(board.id, list).then((ok) => {
       if (ok !== "limit") return ok || failed();
-      setCards((cs) => cs.filter((c) => c.id !== card.id));
+      const ids = new Set(list.map((c) => c.id));
+      setCards((cs) => cs.filter((c) => !ids.has(c.id)));
       toast.error(fill(t.cardLimit, { n: MAX_CARDS.toLocaleString() }));
     }, failed);
   const save = (id: string, patch: Patch) => {
@@ -142,6 +152,7 @@ export function Board({
     menuOpen.current = menu !== null;
   }, [menu]);
 
+
   // Wheel = pan, ⌘/Ctrl+wheel and trackpad pinch = zoom. Native listeners: React's wheel listener is passive (can't preventDefault).
   useEffect(() => {
     const el = viewport.current!;
@@ -178,6 +189,7 @@ export function Board({
   }, []);
 
   const height = (c: CardData) => document.getElementById(`card-${c.id}`)?.offsetHeight ?? 120;
+  const shifted = (o: { x: number; y: number }, dx: number, dy: number) => ({ x: snap(o.x + dx / v.zoom), y: snap(o.y + dy / v.zoom) });
   /** Where a new card goes: the double-clicked spot, else under the last card of its tag's column, else the screen centre. */
   const spotFor = (d: Draft, at?: { x: number; y: number }) => {
     if (at) return at;
@@ -193,29 +205,39 @@ export function Board({
     const spot = spotFor(d, at);
     const card: CardData = { id: crypto.randomUUID(), ...d, x: snap(spot.x), y: snap(spot.y), width: CARD_WIDTH, z: maxZ + 1 };
     setCards((cs) => [...cs, card]);
-    setSelected(card.id);
-    insert(card);
+    setSelected(new Set([card.id]));
+    insert([card]);
     // landed off screen (end of a long column): bring it into view
     const sx = card.x * v.zoom + v.x;
     const sy = card.y * v.zoom + v.y;
     if (sx < 0 || sy < 0 || sx > innerWidth - 120 || sy > innerHeight - 120) jump({ ...v, x: innerWidth / 2 - (card.x + card.width / 2) * v.zoom, y: innerHeight / 3 - card.y * v.zoom });
   };
 
-  const remove = (card: CardData, undoable = true) => {
-    setCards((cs) => cs.filter((c) => c.id !== card.id));
-    setSelected(null);
-    call(deleteCardAction(card.id));
+  const remove = (list: CardData[], undoable = true) => {
+    if (!list.length) return;
+    const ids = new Set(list.map((c) => c.id));
+    setCards((cs) => cs.filter((c) => !ids.has(c.id)));
+    setSelected(new Set());
+    call(deleteCardsAction(board.id, [...ids]));
     if (!undoable) return;
-    toast(t.deleted, {
+    toast(list.length === 1 ? t.deleted : fill(t.deletedMany, { n: list.length }), {
       duration: 8000,
       action: {
         label: t.undo,
         onClick: () => {
-          setCards((cs) => [...cs, card]);
-          insert(card);
+          setCards((cs) => [...cs, ...list]);
+          insert(list);
         },
       },
     });
+  };
+  /** Copies two cells down and to the right, on top of everything, and selected. */
+  const duplicate = (list: CardData[]) => {
+    if (!list.length) return;
+    const copies = list.map((c, i) => ({ ...c, id: crypto.randomUUID(), x: c.x + 2 * GRID, y: c.y + 2 * GRID, z: maxZ + 1 + i }));
+    setCards((cs) => [...cs, ...copies]);
+    setSelected(new Set(copies.map((c) => c.id)));
+    insert(copies);
   };
 
   // Pointer capture starts only after the pointer really moves, so click/double-click still reach the card.
@@ -242,12 +264,17 @@ export function Board({
     const { d, m } = two();
     pinch.current = { d0: d, m0: m, v0: v };
   };
+  // Empty canvas: a mouse drag draws a selection box; touch, the middle button and Space + drag pan.
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
     (document.activeElement as HTMLElement | null)?.blur();
-    setSelected(null);
     setGlide(false);
-    gesture.current = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: v.x, oy: v.y, ow: 0, z: 0, moved: false };
+    if (!additive(e)) setSelected(new Set());
+    const start = { sx: e.clientX, sy: e.clientY, ow: 0, z: 0, moved: false };
+    gesture.current =
+      e.button === 0 && e.pointerType !== "touch" && !spaceHeld
+        ? { kind: "marquee", ...start, ox: 0, oy: 0, base: additive(e) ? new Set(selected) : new Set(), boxes: rects(cards).map((r, i) => ({ ...r, id: cards[i].id })) }
+        : { kind: "pan", ...start, ox: v.x, oy: v.y };
   };
   const startCard = (e: React.PointerEvent, card: CardData, kind: "move" | "resize") => {
     if (e.button !== 0) return;
@@ -256,20 +283,29 @@ export function Board({
     if (kind === "move" && editing?.id === card.id && field) return; // selecting text
     const move: Gesture = { kind, id: card.id, sx: e.clientX, sy: e.clientY, ox: card.x, oy: card.y, ow: card.width, z: cards.some((c) => c.id !== card.id && c.z >= card.z) ? maxZ + 1 : card.z, moved: false };
     if (e.pointerType !== "touch" || kind === "resize") {
-      setSelected(card.id);
-      gesture.current = move;
+      // shift/⌘ toggles the card; a plain press keeps a multi-selection so it can be dragged as one
+      const next = additive(e) ? new Set(selected) : selected.has(card.id) ? selected : new Set([card.id]);
+      if (additive(e)) next[next.has(card.id) ? "delete" : "add"](card.id);
+      setSelected(next);
+      if (!next.has(card.id)) return; // shift/⌘ just took it out of the selection
+      if (kind === "move" && next.size > 1) {
+        // brought to the front together, keeping their order among themselves
+        const list = cards.filter((c) => next.has(c.id)).sort((a, b) => a.z - b.z);
+        const group = new Map(list.map((c, i) => [c.id, { x: c.x, y: c.y, z: maxZ + 1 + i }]));
+        gesture.current = { ...move, group, collapse: additive(e) ? undefined : card.id };
+      } else gesture.current = move;
       return;
     }
     // Touch: one finger pans the canvas; holding still on the card picks it up.
     (document.activeElement as HTMLElement | null)?.blur();
     setGlide(false);
-    const pan: Gesture = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: v.x, oy: v.y, ow: 0, z: 0, moved: false, hold: move, tap: { id: card.id, field: field ?? "title", wasSelected: selected === card.id } };
+    const pan: Gesture = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: v.x, oy: v.y, ow: 0, z: 0, moved: false, hold: move, tap: { id: card.id, field: field ?? "title", wasSelected: selected.has(card.id) } };
     gesture.current = pan;
     clearTimeout(holdTimer.current);
     holdTimer.current = setTimeout(() => {
       if (gesture.current !== pan || pan.moved) return;
       gesture.current = move;
-      setSelected(card.id);
+      setSelected(new Set([card.id]));
       navigator.vibrate?.(10);
     }, HOLD_MS);
   };
@@ -296,6 +332,14 @@ export function Board({
       } catch {} // the pointer is already gone
     }
     if (g.kind === "pan") setView({ ...v, x: g.ox + dx, y: g.oy + dy });
+    else if (g.kind === "marquee") {
+      const r = { x: Math.min(g.sx, e.clientX), y: Math.min(g.sy, e.clientY), w: Math.abs(dx), h: Math.abs(dy) };
+      setBox(r);
+      const a = toWorld(v, r.x, r.y);
+      const b = toWorld(v, r.x + r.w, r.y + r.h);
+      const hits = g.boxes!.filter((c) => c.x < b.x && c.x + c.w > a.x && c.y < b.y && c.y + c.h > a.y).map((c) => c.id);
+      setSelected(new Set([...g.base!, ...hits]));
+    } else if (g.group) setCards((cs) => cs.map((c) => (g.group!.has(c.id) ? { ...c, ...shifted(g.group!.get(c.id)!, dx, dy), z: g.group!.get(c.id)!.z } : c)));
     else setCards((cs) => cs.map((c) => (c.id === g.id ? { ...c, ...patchFor(g, dx, dy, v.zoom) } : c)));
   };
   const onPointerUp = (e: React.PointerEvent) => {
@@ -308,10 +352,13 @@ export function Board({
     clearTimeout(holdTimer.current);
     const g = gesture.current;
     gesture.current = null;
-    if (g?.moved && g.id) save(g.id, patchFor(g, e.clientX - g.sx, e.clientY - g.sy, v.zoom));
+    setBox(null);
+    if (g?.moved && g.group) place([...g.group].map(([id, o]) => ({ id, ...shifted(o, e.clientX - g.sx, e.clientY - g.sy), z: o.z })));
+    else if (g?.moved && g.id) save(g.id, patchFor(g, e.clientX - g.sx, e.clientY - g.sy, v.zoom));
+    else if (g?.collapse) setSelected(new Set([g.collapse]));
     else if (g && !g.moved && g.tap) {
       const { id, field, wasSelected } = g.tap;
-      if (!wasSelected) return setSelected(id);
+      if (!wasSelected) return setSelected(new Set([id]));
       // Second tap on a selected card: edit. Render and focus inside the tap, or iOS won't open the keyboard.
       flushSync(() => setEditing({ id, field }));
       document.querySelector<HTMLElement>(`#card-${id} [data-field=${field}]`)?.focus();
@@ -322,6 +369,7 @@ export function Board({
     if (pointers.current.size < 2) pinch.current = null;
     clearTimeout(holdTimer.current);
     gesture.current = null;
+    setBox(null);
   };
   const onDoubleClick = (e: React.MouseEvent) => {
     if (e.target !== viewport.current) return;
@@ -329,7 +377,7 @@ export function Board({
     setComposing({ at: { x: p.x - CARD_WIDTH / 2, y: p.y - GRID } });
   };
 
-  const place = (list: { id: string; x: number; y: number }[]) => {
+  const place = (list: { id: string; x: number; y: number; z?: number }[]) => {
     const at = new Map(list.map((m) => [m.id, m]));
     setCards((cs) => cs.map((c) => (at.has(c.id) ? { ...c, ...at.get(c.id) } : c)));
     call(moveCardsAction(board.id, list));
@@ -349,12 +397,57 @@ export function Board({
     place(after);
     toast(t.tidied, { duration: 8000, action: { label: t.undo, onClick: () => place(before) } });
   };
+  // Board shortcuts act on the selection. Not while typing, and not inside dialogs or menus (focus mode has its own keys).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (typing(e.target)) return;
+      if (e.key === " ") {
+        if ((e.target as HTMLElement).closest?.("button, a")) return; // Space presses a focused button
+        e.preventDefault(); // no page scroll
+        setSpaceHeld(e.type === "keydown");
+        return;
+      }
+      if (e.type !== "keydown" || document.querySelector("dialog[open], :popover-open")) return;
+      const mod = e.metaKey || e.ctrlKey;
+      const move = MOVES[e.key];
+      if (e.key === "Escape") setSelected(new Set());
+      else if (mod && e.key === "a") setSelected(new Set(cards.map((c) => c.id)));
+      else if (mod && e.key === "d") duplicate(picked);
+      else if (e.key === "Delete" || e.key === "Backspace") remove(picked);
+      else if (move && picked.length) {
+        const step = e.shiftKey ? 4 * GRID : GRID;
+        place(picked.map((c) => ({ id: c.id, x: snap(c.x) + move[0] * step, y: snap(c.y) + move[1] * step })));
+      } else return;
+      e.preventDefault();
+    };
+    addEventListener("keydown", onKey);
+    addEventListener("keyup", onKey);
+    return () => {
+      removeEventListener("keydown", onKey);
+      removeEventListener("keyup", onKey);
+    };
+  });
   const zoomBy = (f: number) => jump(zoomAt(v, innerWidth / 2, innerHeight / 2, v.zoom * f));
   const rename = (value: string) => {
     const next = value.trim();
     if (!next || next === title) return;
     setTitle(next);
     call(renameBoardAction(board.id, next));
+  };
+
+  const menuItems = (): MenuItem[] => {
+    const one = picked.length === 1 ? picked[0] : null;
+    const n = { n: picked.length };
+    return [
+      ...(one
+        ? [
+            { label: t.edit, Icon: PencilSimple, hint: "↵", onSelect: () => setEditing({ id: one.id, field: "title" as const }) },
+            ...(one.title || one.body ? [{ label: t.read, Icon: SpeakerHigh, onSelect: () => speak(one.id, readable(one)) }] : []),
+          ]
+        : []),
+      { label: one ? t.duplicate : fill(t.duplicateMany, n), Icon: Copy, hint: "⌘D", onSelect: () => duplicate(picked) },
+      { label: one ? t.delete : fill(t.deleteMany, n), Icon: Trash, hint: "⌫", danger: true, onSelect: () => remove(picked) },
+    ];
   };
 
   const chips = () => (
@@ -386,7 +479,7 @@ export function Board({
     <>
       <div
         ref={viewport}
-        className="canvas-dots fixed inset-0 touch-none overflow-hidden select-none [-webkit-touch-callout:none]"
+        className={`canvas-dots fixed inset-0 touch-none overflow-hidden select-none [-webkit-touch-callout:none] ${spaceHeld ? "cursor-grab active:cursor-grabbing" : ""}`}
         style={{ "--dot": `${dot}px`, "--dot-x": `${v.x - dot / 2}px`, "--dot-y": `${v.y - dot / 2}px`, transition: glide ? DOTS_GLIDE : undefined } as React.CSSProperties}
         onPointerDownCapture={onPointerDownCapture}
         onPointerDown={onPointerDown}
@@ -401,25 +494,25 @@ export function Board({
               key={card.id}
               card={card}
               t={t}
-              selected={selected === card.id}
+              selected={selected.has(card.id)}
               dim={!matches(card)}
               editingField={editing?.id === card.id ? editing.field : null}
               onPointerDown={(e, kind) => startCard(e, card, kind)}
               onEdit={(field) => setEditing({ id: card.id, field })}
-              onSelect={() => setSelected(card.id)}
+              onSelect={() => setSelected(new Set([card.id]))}
               onMenu={(x, y) => {
-                setSelected(card.id);
-                setMenu({ x, y, card });
+                if (!selected.has(card.id)) setSelected(new Set([card.id]));
+                setMenu({ x, y });
               }}
               onSave={(patch) => save(card.id, patch)}
-              onRemove={() => remove(card)}
               onDone={(empty) => {
                 setEditing(null);
-                if (empty) remove(card, false); // a new card left blank
+                if (empty) remove([card], false); // a new card left blank
               }}
             />
           ))}
         </div>
+        {box && <div className="pointer-events-none absolute rounded-sm border border-cork bg-cork/10" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} />}
         {!cards.length && <p className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-neutral-500">{t.emptyHint}</p>}
       </div>
 
@@ -476,7 +569,7 @@ export function Board({
       </div>
 
       <BoardMenu account={account} boardId={board.id} locale={locale} languages={languages} t={t.menu} onArrange={arrange} />
-      {menu && <CardMenu at={menu} items={[{ label: t.delete, Icon: Trash, hint: "⌫", danger: true, onSelect: () => remove(menu.card) }]} onClose={() => setMenu(null)} />}
+      {menu && <CardMenu at={menu} items={menuItems()} onClose={() => setMenu(null)} />}
       {composing && <Composer tags={tags} tag={activeTag} t={t} onAdd={(d) => add(d, composing.at)} onClose={() => setComposing(null)} />}
       {focusOpen && <Focus cards={ordered.filter(matches)} t={t.focus} untitled={t.untitledCard} onClose={() => setFocusOpen(false)} />}
     </>
@@ -500,7 +593,6 @@ function CardView({
   onSelect,
   onMenu,
   onSave,
-  onRemove,
   onDone,
 }: {
   card: CardData;
@@ -513,7 +605,6 @@ function CardView({
   onSelect: () => void;
   onMenu: (x: number, y: number) => void;
   onSave: (patch: Patch) => void;
-  onRemove: () => void;
   onDone: (empty: boolean) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
@@ -596,7 +687,7 @@ function CardView({
         if ((e.nativeEvent as PointerEvent).pointerType === "touch") return; // Android long-press: that is hold-to-move
         onMenu(e.clientX, e.clientY);
       }}
-      onFocus={(e) => e.target === e.currentTarget && onSelect()}
+      onFocus={(e) => e.target === e.currentTarget && e.currentTarget.matches(":focus-visible") && onSelect()} // keyboard focus (Tab) selects; clicks select in onPointerDown
       onDoubleClick={(e) => {
         e.stopPropagation();
         if (!editing) onEdit(((e.target as HTMLElement).closest("[data-field]") as HTMLElement | null)?.dataset.field as Field ?? "title");
@@ -606,19 +697,9 @@ function CardView({
         onDone((["tag", "title", "body"] as const).every((f) => !fieldEl(f)?.innerText.trim()));
       }}
       onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return; // typing inside a field
-        const move = MOVES[e.key];
-        if (e.key === "Enter") {
-          e.preventDefault();
-          onEdit("title");
-        } else if (e.key === "Delete" || e.key === "Backspace") {
-          e.preventDefault();
-          onRemove();
-        } else if (move) {
-          e.preventDefault();
-          const step = e.shiftKey ? 4 * GRID : GRID;
-          onSave({ x: snap(card.x) + move[0] * step, y: snap(card.y) + move[1] * step });
-        }
+        if (e.target !== e.currentTarget || e.key !== "Enter") return; // Delete, arrows, ⌘D: board shortcuts on the selection
+        e.preventDefault();
+        onEdit("title");
       }}
     >
       <div ref={inner} className="px-4.5 pt-4 pb-5">
