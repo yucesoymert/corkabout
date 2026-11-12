@@ -76,6 +76,7 @@ export const en: Dictionary = {
     duplicate: "Duplicate",
     duplicateMany: "Duplicate {n} cards",
     undo: "Undo",
+    undone: "Undone",
     undoHint: "⌘Z / Ctrl+Z also undoes it",
     saveFailed: "Couldn't save. Check your connection and try again.",
     cardLimit: "You can have up to {n} cards. Delete a few to make room.",
