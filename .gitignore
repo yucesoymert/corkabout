@@ -14,3 +14,4 @@ PROGRESS.md
 
 # Personal boards stay on this machine (~/Documents/corkabout-boards), never in git
 scripts/boards/
+legacy/
