@@ -82,18 +82,25 @@ export function tagRows(cards: Placed[]) {
   return out;
 }
 
-/** Masonry grid in the given order: each card goes to the shortest column, one cell apart. */
-export function masonry(cards: Placed[], order: (a: Placed, b: Placed) => number) {
+/** Masonry grid in the given order: each card goes to the shortest column, one cell apart. With `section`
+ * (e.g. the tag), each section fills its own block and the next one starts two cells below its lowest card. */
+export function masonry(cards: Placed[], order: (a: Placed, b: Placed) => number, section: (c: Placed) => string = () => "") {
   if (!cards.length) return [];
   const cols = Math.min(6, Math.ceil(Math.sqrt(cards.length))); // ponytail: column count from the card count, not the screen
   const colW = cellsUp(Math.max(...cards.map((c) => c.width))) + GRID;
   const left = snap(Math.min(...cards.map((c) => c.x)));
-  const top = snap(Math.min(...cards.map((c) => c.y)));
-  const bottoms = Array<number>(cols).fill(top);
-  return [...cards].sort(order).map((c) => {
-    const col = bottoms.indexOf(Math.min(...bottoms));
-    const at = { id: c.id, x: left + col * colW, y: bottoms[col] };
-    bottoms[col] += cellsUp(c.h) + GRID;
-    return at;
-  });
+  let top = snap(Math.min(...cards.map((c) => c.y)));
+  const out: { id: string; x: number; y: number }[] = [];
+  const sections = new Map<string, Placed[]>(); // keeps the order of first appearance
+  for (const c of [...cards].sort(order)) sections.set(section(c), [...(sections.get(section(c)) ?? []), c]);
+  for (const list of sections.values()) {
+    const bottoms = Array<number>(cols).fill(top);
+    for (const c of list) {
+      const col = bottoms.indexOf(Math.min(...bottoms));
+      out.push({ id: c.id, x: left + col * colW, y: bottoms[col] });
+      bottoms[col] += cellsUp(c.h) + GRID;
+    }
+    top = Math.max(...bottoms) + GRID;
+  }
+  return out;
 }

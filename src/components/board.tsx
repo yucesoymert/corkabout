@@ -328,7 +328,7 @@ export function Board({
   const LAYOUTS: Record<Arrangement, (list: Placed[]) => { id: string; x: number; y: number }[]> = {
     tagColumns: tidy,
     tagRows,
-    gridByTag: (list) => masonry(list, (a, b) => (a.tag ?? "\uffff").localeCompare(b.tag ?? "\uffff", locale) || a.y - b.y || a.x - b.x),
+    gridByTag: (list) => masonry(list, (a, b) => (a.tag ?? "\uffff").localeCompare(b.tag ?? "\uffff", locale) || a.y - b.y || a.x - b.x, (c) => c.tag ?? ""),
     gridByTitle: (list) => {
       const title = new Map(cards.map((c) => [c.id, c.title]));
       return masonry(list, (a, b) => title.get(a.id)!.localeCompare(title.get(b.id)!, locale));

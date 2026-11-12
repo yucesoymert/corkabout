@@ -76,3 +76,15 @@ test("masonry fills the shortest column in the given order", () => {
   assert.deepEqual(at.c, [0, 48 + GRID]);
   assert.deepEqual(at.d, [312, 48 + GRID]); // column 2 is shorter than column 1 (which has c)
 });
+
+test("masonry with sections keeps each tag in its own block, the next block below the previous one", () => {
+  // a1 is tall, so a2 lands in column 2; "b" must not start next to a2 but below both "a" cards.
+  const list = [card("a1", "a", 0, 0, 240), card("a2", "a", 0, 0, 48), card("b1", "b", 0, 0, 48), card("b2", "b", 0, 0, 48)];
+  const byTag = (p: { tag: string | null; id: string }, q: { tag: string | null; id: string }) => (p.tag ?? "").localeCompare(q.tag ?? "") || p.id.localeCompare(q.id);
+  const at = Object.fromEntries(masonry(list, byTag, (c) => c.tag ?? "").map((p) => [p.id, [p.x, p.y]]));
+  const blockB = 240 + GRID + GRID; // below a1 (the lowest "a" card) plus the gap between sections
+  assert.deepEqual(at.a1, [0, 0]);
+  assert.deepEqual(at.a2, [312, 0]);
+  assert.deepEqual(at.b1, [0, blockB]);
+  assert.deepEqual(at.b2, [312, blockB]);
+});
