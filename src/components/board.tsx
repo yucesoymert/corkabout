@@ -56,9 +56,28 @@ const typing = (el: EventTarget | null) => el instanceof HTMLElement && (el.isCo
 const HOLD_MS = 350;
 
 const CARD_WIDTH = 12 * GRID;
+const CARD_RADIUS = 6; // a group frame is rounded by this plus its padding, so the corners run parallel
 const GLIDE = "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)";
 const DOTS_GLIDE = ["background-size", "background-position"].map((p) => GLIDE.replace("transform", p)).join(", ");
 const viewKey = (boardId: string) => `corkabout:view:${boardId}`;
+
+type Undo = { kind: "restore"; cards: CardData[] } | { kind: "place"; list: { id: string; x: number; y: number }[] } | { kind: "regroup"; group: GroupData; ids: string[] };
+type UndoEntry = { id: string; undo: Undo };
+const UNDO_LIMIT = 20; // ponytail: per board in this browser; another device has its own list
+const undoKey = (boardId: string) => `corkabout:undo:${boardId}`;
+function loadUndos(boardId: string): UndoEntry[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(undoKey(boardId)) ?? "[]");
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+function saveUndos(list: UndoEntry[], boardId: string) {
+  try {
+    localStorage.setItem(undoKey(boardId), JSON.stringify(list));
+  } catch {} // full storage (a huge delete): undo still works from the toast until a reload
+}
 
 function savedView(boardId: string): View | null {
   try {
@@ -230,22 +249,13 @@ export function Board({
     if (sx < 0 || sy < 0 || sx > innerWidth - 120 || sy > innerHeight - 120) jump({ ...v, x: innerWidth / 2 - (card.x + card.width / 2) * v.zoom, y: innerHeight / 3 - card.y * v.zoom });
   };
 
-  /** Toast with an Undo button; ⌘Z/Ctrl+Z also undoes it, newest first, after the toast is gone too. */
-  const undos = useRef<{ id: string | number; run: () => void }[]>([]);
-  const offerUndo = (message: string, undo: () => void) => {
-    const entry = { id: 0 as string | number, run: () => {} };
-    entry.run = () => {
-      undos.current = undos.current.filter((u) => u !== entry); // once only
-      undo();
-    };
-    entry.id = toast(message, { duration: 10_000, description: t.undoHint, action: { label: t.undo, onClick: entry.run } });
-    undos.current = [...undos.current.slice(-19), entry]; // ponytail: last 20 actions, kept for this visit only
-  };
-  const undoLast = () => {
-    const last = undos.current.at(-1);
-    if (!last) return;
-    toast.dismiss(last.id);
-    last.run();
+  /** Toast with an Undo button; ⌘Z/Ctrl+Z also undoes it, newest first, after the toast is gone and after a reload.
+   * The list is data (not callbacks) so it can live in localStorage, per board. */
+  const undoRef = useRef<(id?: string) => void>(() => {}); // undoEntry is declared further down
+  const offerUndo = (message: string, undo: Undo) => {
+    const entry = { id: crypto.randomUUID(), undo };
+    saveUndos([...loadUndos(board.id), entry].slice(-UNDO_LIMIT), board.id);
+    toast(message, { id: entry.id, duration: 10_000, description: t.undoHint, action: { label: t.undo, onClick: () => undoRef.current(entry.id) } });
   };
   const remove = (list: CardData[], undoable = true) => {
     if (!list.length) return;
@@ -254,10 +264,7 @@ export function Board({
     setSelected(new Set());
     call(deleteCardsAction(board.id, [...ids]));
     if (!undoable) return;
-    offerUndo(list.length === 1 ? t.deleted : fill(t.deletedMany, { n: list.length }), () => {
-      setCards((cs) => [...cs, ...list]);
-      insert(list);
-    });
+    offerUndo(list.length === 1 ? t.deleted : fill(t.deletedMany, { n: list.length }), { kind: "restore", cards: list });
   };
   /** Copies two cells down and to the right, on top of everything, and selected. */
   const duplicate = (list: CardData[]) => {
@@ -293,7 +300,7 @@ export function Board({
     setGroups((gs) => gs.filter((x) => x.id !== gid));
     setGroupOf(list, null);
     call(deleteGroupAction(board.id, gid));
-    if (g) offerUndo(t.ungrouped, () => makeGroup(list, g));
+    if (g) offerUndo(t.ungrouped, { kind: "regroup", group: g, ids: list.map((c) => c.id) });
   };
   const leaveGroup = (list: CardData[]) => {
     setGroupOf(list, null);
@@ -474,7 +481,7 @@ export function Board({
     const before = cards.map(({ id, x, y }) => ({ id, x, y }));
     const after = LAYOUTS[kind](rects(cards).map((r, i) => ({ ...r, id: cards[i].id, tag: cards[i].tag, width: cards[i].width })));
     place(after);
-    offerUndo(t.tidied, () => place(before));
+    offerUndo(t.tidied, { kind: "place", list: before });
   };
   // Board shortcuts act on the selection. Not while typing, and not inside dialogs or menus (focus mode has its own keys).
   useEffect(() => {
@@ -492,7 +499,7 @@ export function Board({
       if (e.key === "Escape") setSelected(new Set());
       else if (mod && e.key === "a") setSelected(new Set(cards.map((c) => c.id)));
       else if (mod && e.key === "d") duplicate(picked);
-      else if (mod && !e.shiftKey && e.key.toLowerCase() === "z") undoLast();
+      else if (mod && !e.shiftKey && e.key.toLowerCase() === "z") undoRef.current();
       else if (mod && e.key.toLowerCase() === "g") {
         const whole = wholeGroup();
         if (e.shiftKey) {
@@ -512,6 +519,26 @@ export function Board({
       removeEventListener("keydown", onKey);
       removeEventListener("keyup", onKey);
     };
+  });
+  /** Runs one entry of the undo list (newest if no id) and drops it; cards that are gone since are skipped. */
+  const undoEntry = (id?: string) => {
+    const list = loadUndos(board.id);
+    const entry = id ? list.find((u) => u.id === id) : list.at(-1);
+    if (!entry) return;
+    saveUndos(list.filter((u) => u.id !== entry.id), board.id);
+    toast.dismiss(entry.id);
+    const u = entry.undo;
+    const here = new Set(cards.map((c) => c.id));
+    if (u.kind === "restore") {
+      const back = u.cards.filter((c) => !here.has(c.id));
+      setCards((cs) => [...cs, ...back]);
+      if (back.length) insert(back);
+    } else if (u.kind === "place") place(u.list.filter((m) => here.has(m.id)));
+    else makeGroup(cards.filter((c) => u.ids.includes(c.id)), u.group);
+    if (!id) toast(t.undone, { duration: 2000 });
+  };
+  useEffect(() => {
+    undoRef.current = undoEntry;
   });
   const zoomBy = (f: number) => jump(zoomAt(v, innerWidth / 2, innerHeight / 2, v.zoom * f));
   const rename = (value: string) => {
@@ -605,7 +632,7 @@ export function Board({
           {view && groups.map((g) => {
             const list = membersOf(g.id);
             if (!list.length) return null; // every card left or was deleted; the row stays for undo
-            const pad = GRID / 4; // a quarter cell: frames of two neighbouring columns (one cell apart) keep a gap
+            const pad = GRID / 2 - 2; // almost half a cell: frames of two neighbouring columns (one cell apart) keep a thin gap
             const left = Math.min(...list.map((c) => c.x)) - pad;
             const top = Math.min(...list.map((c) => c.y)) - pad;
             const right = Math.max(...list.map((c) => c.x + c.width)) + pad;
@@ -620,8 +647,8 @@ export function Board({
                   setSelected(new Set(list.map((c) => c.id)));
                   setMenu({ x: e.clientX, y: e.clientY });
                 }}
-                className={`absolute cursor-grab rounded-2xl border transition-colors active:cursor-grabbing ${on ? "border-cork" : "border-neutral-300"}`}
-                style={{ left, top, width: right - left, height: bottom - top }}
+                className={`absolute cursor-grab border transition-colors active:cursor-grabbing ${on ? "border-cork" : "border-neutral-300"}`}
+                style={{ left, top, width: right - left, height: bottom - top, borderRadius: CARD_RADIUS + pad }}
               >
                 <input
                   defaultValue={g.title}
@@ -834,8 +861,8 @@ function CardView({
       tabIndex={0}
       aria-label={fill(t.card, { title: card.title || t.untitledCard })}
       aria-description={t.cardHelp}
-      style={{ left: card.x, top: card.y, width: card.width, zIndex: card.z }}
-      className={`group absolute rounded-md bg-white transition-[box-shadow,opacity] outline-none ${
+      style={{ left: card.x, top: card.y, width: card.width, zIndex: card.z, borderRadius: CARD_RADIUS }}
+      className={`group absolute bg-white transition-[box-shadow,opacity] outline-none ${
         selected ? "shadow-lg ring-2 ring-cork" : "shadow-[0_1px_3px_rgba(0,0,0,.08)] hover:shadow-md dark:ring-1 dark:ring-neutral-200"
       } ${dim ? "opacity-20" : ""} ${editing ? "" : "cursor-grab active:cursor-grabbing"}`}
       onPointerDown={(e) => onPointerDown(e, "move")}
