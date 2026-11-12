@@ -20,14 +20,16 @@ import type { Dictionary } from "@/i18n/tr";
 import type { Locale } from "@/i18n/locales";
 import { clampZoom, fitView, GRID, masonry, READABLE_ZOOM, snap, tagRows, tidy, toWorld, zoomAt, type Placed, type View } from "@/lib/canvas";
 import { fill } from "@/lib/format";
+import { type Color, type Kind, type Mark, type MarkField, fromChars, normalize, paint, readField, selectRange, toHtml } from "@/lib/marks";
 import { MAX_CARDS } from "@/lib/limits";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
 import { type Account, type Arrangement, BoardMenu } from "./board-menu";
 import { CardMenu, type MenuItem } from "./card-menu";
 import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
+import { MarkBar } from "./mark-bar";
 
-export type CardData = { id: string; title: string; body: string; tag: string | null; x: number; y: number; width: number; z: number; groupId: string | null };
+export type CardData = { id: string; title: string; body: string; tag: string | null; x: number; y: number; width: number; z: number; groupId: string | null; marks: Mark[] };
 export type GroupData = { id: string; title: string };
 type Field = "tag" | "title" | "body";
 type Patch = Partial<Omit<CardData, "id">>;
@@ -218,7 +220,7 @@ export function Board({
   };
   const add = (d: Draft, at?: { x: number; y: number }) => {
     const spot = spotFor(d, at);
-    const card: CardData = { id: crypto.randomUUID(), ...d, x: snap(spot.x), y: snap(spot.y), width: CARD_WIDTH, z: maxZ + 1, groupId: null };
+    const card: CardData = { id: crypto.randomUUID(), ...d, x: snap(spot.x), y: snap(spot.y), width: CARD_WIDTH, z: maxZ + 1, groupId: null, marks: [] };
     setCards((cs) => [...cs, card]);
     setSelected(new Set([card.id]));
     insert([card]);
@@ -507,6 +509,24 @@ export function Board({
     call(renameBoardAction(board.id, next));
   };
 
+  /** Toolbar over a text selection while editing: colour it (k = text colour or highlight), or clear (null). */
+  const applyMark = (k: Kind | null, c: Color | null) => {
+    // the field comes from the selection: clicking from the title into the body doesn't change `editing.field`
+    const card = editing ? cards.find((x) => x.id === editing.id) : null;
+    const range = getSelection()?.rangeCount ? getSelection()!.getRangeAt(0) : null;
+    const node = range?.commonAncestorContainer;
+    const el = card && (node instanceof Element ? node : node?.parentElement)?.closest<HTMLElement>(`#card-${card.id} [data-field=title], #card-${card.id} [data-field=body]`);
+    if (!card || !range || !el) return;
+    const field = el.dataset.field as MarkField;
+    const { chars, at } = readField(el); // includes what was typed since the last save
+    const s = at(range.startContainer, range.startOffset);
+    const e = at(range.endContainer, range.endOffset);
+    const { chars: clean, map } = normalize(paint(chars, s, e, k, c), field);
+    const { text, marks } = fromChars(clean, field);
+    save(card.id, { [field]: text, marks: [...card.marks.filter((m) => m.f !== field), ...marks] });
+    requestAnimationFrame(() => selectRange(el, map[s], map[e])); // the new HTML replaced the selection; pick another colour right away
+  };
+
   const menuItems = (): MenuItem[] => {
     const one = picked.length === 1 ? picked[0] : null;
     const n = { n: picked.length };
@@ -689,6 +709,7 @@ export function Board({
 
       <BoardMenu account={account} boardId={board.id} locale={locale} languages={languages} t={t.menu} onArrange={arrange} />
       {menu && <CardMenu at={menu} items={menuItems()} onClose={() => setMenu(null)} />}
+      {editing && <MarkBar cardId={editing.id} t={t} onApply={applyMark} />}
       {composing && <Composer tags={tags} tag={activeTag} t={t} onAdd={(d) => add(d, composing.at)} onClose={() => setComposing(null)} />}
       {focusOpen && <Focus cards={ordered.filter(matches)} t={t.focus} untitled={t.untitledCard} onClose={() => setFocusOpen(false)} />}
     </>
@@ -749,18 +770,25 @@ function CardView({
     getSelection()?.collapseToEnd();
   }, [editingField]);
 
-  const commit = (field: Field, raw: string) => {
-    const text = field === "body" ? raw.replace(/\s+$/, "") : raw.replace(/\s+/g, " ").trim();
-    const value = field === "tag" ? text.slice(0, 40) || null : text;
-    if (value !== card[field]) onSave({ [field]: value });
+  const commit = (field: Field, el: HTMLElement) => {
+    if (field === "tag") {
+      const tag = el.innerText.replace(/\s+/g, " ").trim().slice(0, 40) || null;
+      if (tag !== card.tag) onSave({ tag });
+      return;
+    }
+    // title/body: text and its coloured parts, read from the spans in the DOM
+    const { text, marks } = fromChars(normalize(readField(el).chars, field).chars, field);
+    const same = (a: Mark[]) => JSON.stringify(a.filter((m) => m.f === field));
+    if (text !== card[field] || same(marks) !== same(card.marks)) onSave({ [field]: text, marks: [...card.marks.filter((m) => m.f !== field), ...marks] });
   };
 
-  // Each field is its own contentEditable, saved on blur. key = value: after a save React remounts the node
-  // instead of patching text the browser already changed.
+  // Each field is its own contentEditable, saved on blur. The tag remounts after a save (key = value) instead of
+  // patching text the browser already changed; title/body get their HTML set, which React leaves alone until it changes.
   const text = (field: Field, value: string, className: string, placeholder: string) =>
     editing || value ? (
       <div
-        key={`${field}:${value}`}
+        key={field === "tag" ? `tag:${value}` : field}
+        {...(field === "tag" ? { children: value } : { dangerouslySetInnerHTML: { __html: toHtml(value, card.marks, field) } })}
         data-field={field}
         data-placeholder={placeholder}
         contentEditable={editing ? "plaintext-only" : false}
@@ -769,7 +797,7 @@ function CardView({
         aria-label={editing ? placeholder : undefined}
         aria-multiline={editing && field === "body" ? true : undefined}
         spellCheck={editing}
-        onBlur={editing ? (e) => commit(field, e.currentTarget.innerText) : undefined}
+        onBlur={editing ? (e) => commit(field, e.currentTarget) : undefined}
         onKeyDown={
           editing
             ? (e) => {
@@ -783,9 +811,7 @@ function CardView({
             : undefined
         }
         className={`${className} break-words whitespace-pre-wrap outline-none empty:before:text-neutral-400 empty:before:content-[attr(data-placeholder)] ${editing ? "-mx-1 cursor-text rounded px-1 select-text focus:bg-neutral-100/70" : ""}`}
-      >
-        {value}
-      </div>
+      />
     ) : null;
 
   return (
