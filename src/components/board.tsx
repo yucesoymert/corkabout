@@ -631,7 +631,7 @@ export function Board({
           {view && groups.map((g) => {
             const list = membersOf(g.id);
             if (!list.length) return null; // every card left or was deleted; the row stays for undo
-            const pad = GRID / 4; // a quarter cell: frames of two neighbouring columns (one cell apart) keep a gap
+            const pad = GRID / 2 - 2; // almost half a cell: frames of two neighbouring columns (one cell apart) keep a thin gap
             const left = Math.min(...list.map((c) => c.x)) - pad;
             const top = Math.min(...list.map((c) => c.y)) - pad;
             const right = Math.max(...list.map((c) => c.x + c.width)) + pad;
