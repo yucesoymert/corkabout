@@ -37,7 +37,7 @@ const HOLD_MS = 350;
 const CARD_WIDTH = 12 * GRID;
 const GLIDE = "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)";
 const DOTS_GLIDE = ["background-size", "background-position"].map((p) => GLIDE.replace("transform", p)).join(", ");
-const viewKey = (boardId: string) => `corkspace:view:${boardId}`;
+const viewKey = (boardId: string) => `corkabout:view:${boardId}`;
 
 function savedView(boardId: string): View | null {
   try {

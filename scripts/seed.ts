@@ -1,6 +1,6 @@
 // One-off: turns the cards of the old page (legacy/interview.html) into an "Interview" board, one column per category.
 // Usage: pnpm seed --email you@gmail.com   (sign in once with Google first)
-// Local test user: pnpm seed --email test@corkspace.test --create-user   (see src/app/api/dev/login)
+// Local test user: pnpm seed --email test@corkabout.test --create-user   (see src/app/api/dev/login)
 import { config } from "dotenv";
 config({ path: ".env.local" });
 

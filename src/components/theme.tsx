@@ -8,7 +8,7 @@ import { Toaster } from "sonner";
 // is set before paint by the script in [lang]/layout.tsx and kept in sync here.
 export type ThemeChoice = "light" | "dark" | "system";
 
-const EVENT = "corkspace:theme";
+const EVENT = "corkabout:theme";
 const systemDark = () => matchMedia("(prefers-color-scheme: dark)").matches;
 const stored = (): ThemeChoice => (localStorage.theme === "light" || localStorage.theme === "dark" ? localStorage.theme : "system");
 const apply = () => document.documentElement.classList.toggle("dark", stored() === "system" ? systemDark() : stored() === "dark");
