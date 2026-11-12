@@ -36,7 +36,7 @@ export function MarkBar({ cardId, t, onApply }: { cardId: string; t: Dictionary[
 
   if (!at) return null;
   const button =
-    "grid size-7 place-items-center rounded-md hover:bg-neutral-100 aria-pressed:bg-neutral-100 aria-pressed:ring-2 aria-pressed:ring-neutral-900 aria-pressed:ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900";
+    "grid size-7 place-items-center rounded-md hover:bg-neutral-100 aria-pressed:bg-neutral-200 aria-pressed:shadow-[inset_0_1px_3px_rgba(0,0,0,.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900";
   const toggle = (k: Kind, c: Color) => onApply(k, at[k] === c ? null : c);
   return (
     <div
