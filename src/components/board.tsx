@@ -230,6 +230,23 @@ export function Board({
     if (sx < 0 || sy < 0 || sx > innerWidth - 120 || sy > innerHeight - 120) jump({ ...v, x: innerWidth / 2 - (card.x + card.width / 2) * v.zoom, y: innerHeight / 3 - card.y * v.zoom });
   };
 
+  /** Toast with an Undo button; ⌘Z/Ctrl+Z also undoes it, newest first, after the toast is gone too. */
+  const undos = useRef<{ id: string | number; run: () => void }[]>([]);
+  const offerUndo = (message: string, undo: () => void) => {
+    const entry = { id: 0 as string | number, run: () => {} };
+    entry.run = () => {
+      undos.current = undos.current.filter((u) => u !== entry); // once only
+      undo();
+    };
+    entry.id = toast(message, { duration: 10_000, description: t.undoHint, action: { label: t.undo, onClick: entry.run } });
+    undos.current = [...undos.current.slice(-19), entry]; // ponytail: last 20 actions, kept for this visit only
+  };
+  const undoLast = () => {
+    const last = undos.current.at(-1);
+    if (!last) return;
+    toast.dismiss(last.id);
+    last.run();
+  };
   const remove = (list: CardData[], undoable = true) => {
     if (!list.length) return;
     const ids = new Set(list.map((c) => c.id));
@@ -237,15 +254,9 @@ export function Board({
     setSelected(new Set());
     call(deleteCardsAction(board.id, [...ids]));
     if (!undoable) return;
-    toast(list.length === 1 ? t.deleted : fill(t.deletedMany, { n: list.length }), {
-      duration: 8000,
-      action: {
-        label: t.undo,
-        onClick: () => {
-          setCards((cs) => [...cs, ...list]);
-          insert(list);
-        },
-      },
+    offerUndo(list.length === 1 ? t.deleted : fill(t.deletedMany, { n: list.length }), () => {
+      setCards((cs) => [...cs, ...list]);
+      insert(list);
     });
   };
   /** Copies two cells down and to the right, on top of everything, and selected. */
@@ -282,7 +293,7 @@ export function Board({
     setGroups((gs) => gs.filter((x) => x.id !== gid));
     setGroupOf(list, null);
     call(deleteGroupAction(board.id, gid));
-    if (g) toast(t.ungrouped, { duration: 8000, action: { label: t.undo, onClick: () => makeGroup(list, g) } });
+    if (g) offerUndo(t.ungrouped, () => makeGroup(list, g));
   };
   const leaveGroup = (list: CardData[]) => {
     setGroupOf(list, null);
@@ -463,7 +474,7 @@ export function Board({
     const before = cards.map(({ id, x, y }) => ({ id, x, y }));
     const after = LAYOUTS[kind](rects(cards).map((r, i) => ({ ...r, id: cards[i].id, tag: cards[i].tag, width: cards[i].width })));
     place(after);
-    toast(t.tidied, { duration: 8000, action: { label: t.undo, onClick: () => place(before) } });
+    offerUndo(t.tidied, () => place(before));
   };
   // Board shortcuts act on the selection. Not while typing, and not inside dialogs or menus (focus mode has its own keys).
   useEffect(() => {
@@ -481,6 +492,7 @@ export function Board({
       if (e.key === "Escape") setSelected(new Set());
       else if (mod && e.key === "a") setSelected(new Set(cards.map((c) => c.id)));
       else if (mod && e.key === "d") duplicate(picked);
+      else if (mod && !e.shiftKey && e.key.toLowerCase() === "z") undoLast();
       else if (mod && e.key.toLowerCase() === "g") {
         const whole = wholeGroup();
         if (e.shiftKey) {
@@ -593,10 +605,11 @@ export function Board({
           {view && groups.map((g) => {
             const list = membersOf(g.id);
             if (!list.length) return null; // every card left or was deleted; the row stays for undo
-            const left = Math.min(...list.map((c) => c.x)) - GRID;
-            const top = Math.min(...list.map((c) => c.y)) - GRID;
-            const right = Math.max(...list.map((c) => c.x + c.width)) + GRID;
-            const bottom = Math.max(...list.map((c) => c.y + height(c))) + GRID;
+            const pad = GRID / 4; // a quarter cell: frames of two neighbouring columns (one cell apart) keep a gap
+            const left = Math.min(...list.map((c) => c.x)) - pad;
+            const top = Math.min(...list.map((c) => c.y)) - pad;
+            const right = Math.max(...list.map((c) => c.x + c.width)) + pad;
+            const bottom = Math.max(...list.map((c) => c.y + height(c))) + pad;
             const on = list.every((c) => selected.has(c.id));
             return (
               <div
