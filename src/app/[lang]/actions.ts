@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import { db } from "@/db";
 import { boards, cards, users } from "@/db/schema";
 import { requireBoard, requireUser } from "@/lib/auth-guard";
 import { ICON_NAMES, TINT_NAMES } from "@/lib/board-look";
+import { MAX_BOARDS, MAX_CARDS } from "@/lib/limits";
 
 // Session + validation at the trust boundary. Card actions return false instead of throwing,
 // the board shows a "couldn't save" toast and keeps the local state.
@@ -16,7 +17,7 @@ import { ICON_NAMES, TINT_NAMES } from "@/lib/board-look";
 const coord = z.number().int().min(-1_000_000).max(1_000_000);
 const cardFields = z.object({
   title: z.string().max(1_000),
-  body: z.string().max(50_000),
+  body: z.string().max(10_000),
   tag: z.string().trim().max(40).nullable(),
   x: coord,
   y: coord,
@@ -27,6 +28,10 @@ const newCard = cardFields.extend({ id: z.uuid() });
 const boardTitle = z.string().trim().min(1).max(120);
 
 const ownBoards = (userId: string) => db.select({ id: boards.id }).from(boards).where(eq(boards.userId, userId));
+
+// ponytail: count-then-insert, two parallel requests can pass the cap by one; a DB trigger if that ever matters
+const boardCount = async (userId: string) => (await db.select({ n: count() }).from(boards).where(eq(boards.userId, userId)))[0].n;
+const cardCount = async (userId: string) => (await db.select({ n: count() }).from(cards).where(inArray(cards.boardId, ownBoards(userId))))[0].n;
 
 export async function signOutAction() {
   await signOut({ redirectTo: "/" });
@@ -43,6 +48,7 @@ export async function updateNameAction(name: string) {
 
 export async function createBoardAction(title: string) {
   const user = await requireUser();
+  if ((await boardCount(user.id)) >= MAX_BOARDS) redirect("/"); // the dashboard already shows the limit and hides the button
   const [board] = await db.insert(boards).values({ userId: user.id, title: boardTitle.parse(title) }).returning({ id: boards.id });
   redirect(`/b/${board.id}`); // the proxy adds the locale
 }
@@ -72,11 +78,12 @@ export async function deleteBoardAction(id: string) {
   refresh(); // only called from the dashboard, so re-render it in place
 }
 
-/** Also used by "undo" after a delete: the client sends the whole card back with its old id. */
-export async function createCardAction(boardId: string, card: z.input<typeof newCard>) {
+/** Also used by "undo" after a delete: the client sends the whole card back with its old id. "limit" = MAX_CARDS reached. */
+export async function createCardAction(boardId: string, card: z.input<typeof newCard>): Promise<boolean | "limit"> {
   const board = await requireBoard(boardId);
   const parsed = newCard.safeParse(card);
   if (!parsed.success) return false;
+  if ((await cardCount(board.userId)) >= MAX_CARDS) return "limit";
   await db.insert(cards).values({ ...parsed.data, boardId: board.id }).onConflictDoNothing();
   return true;
 }

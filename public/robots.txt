@@ -1,0 +1,5 @@
+# Only the sign-in page is public; boards are private and every crawl costs a function call.
+User-agent: *
+Allow: /tr/login
+Allow: /en/login
+Disallow: /

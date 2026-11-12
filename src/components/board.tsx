@@ -10,6 +10,7 @@ import type { Dictionary } from "@/i18n/tr";
 import type { Locale } from "@/i18n/locales";
 import { clampZoom, fitView, GRID, masonry, READABLE_ZOOM, snap, tagRows, tidy, toWorld, zoomAt, type Placed, type View } from "@/lib/canvas";
 import { fill } from "@/lib/format";
+import { MAX_CARDS } from "@/lib/limits";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
 import { type Account, type Arrangement, BoardMenu } from "./board-menu";
 import { Composer, type Draft } from "./composer";
@@ -94,6 +95,13 @@ export function Board({
 
   const failed = () => toast.error(t.saveFailed);
   const call = (p: Promise<boolean>) => p.then((ok) => ok || failed(), failed);
+  /** Optimistic insert; at the card limit the card is taken back off the board. */
+  const insert = (card: CardData) =>
+    createCardAction(board.id, card).then((ok) => {
+      if (ok !== "limit") return ok || failed();
+      setCards((cs) => cs.filter((c) => c.id !== card.id));
+      toast.error(fill(t.cardLimit, { n: MAX_CARDS.toLocaleString() }));
+    }, failed);
   const save = (id: string, patch: Patch) => {
     setCards((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
     call(updateCardAction(id, patch));
@@ -177,7 +185,7 @@ export function Board({
     const card: CardData = { id: crypto.randomUUID(), ...d, x: snap(spot.x), y: snap(spot.y), width: CARD_WIDTH, z: maxZ + 1 };
     setCards((cs) => [...cs, card]);
     setSelected(card.id);
-    call(createCardAction(board.id, card));
+    insert(card);
     // landed off screen (end of a long column): bring it into view
     const sx = card.x * v.zoom + v.x;
     const sy = card.y * v.zoom + v.y;
@@ -195,7 +203,7 @@ export function Board({
         label: t.undo,
         onClick: () => {
           setCards((cs) => [...cs, card]);
-          call(createCardAction(board.id, card));
+          insert(card);
         },
       },
     });
