@@ -24,7 +24,7 @@ Next.js 16 · React · Tailwind CSS · Auth.js (Google) · Drizzle ORM · Neon P
 pnpm install
 cp .env.example .env.local   # fill in Google OAuth, AUTH_SECRET and DATABASE_URL
 pnpm db:migrate
-pnpm seed --email test@corkabout.test --create-user
+pnpm seed --email test@corkabout.test --create-user --file <old-page.html>   # optional sample board
 pnpm dev                     # then open http://localhost:3000/api/dev/login
 ```
 
