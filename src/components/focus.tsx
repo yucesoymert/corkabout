@@ -3,6 +3,7 @@
 import { ArrowLeft, ArrowRight, SpeakerHigh, Stop, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Dictionary } from "@/i18n/tr";
+import { toHtml } from "@/lib/marks";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
 import type { CardData } from "./board";
 
@@ -54,9 +55,9 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
         <>
           <article ref={article} tabIndex={-1} aria-live="polite" className="max-h-[70dvh] w-full max-w-[720px] overflow-y-auto rounded-lg bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,.12)] outline-none sm:p-12">
             {card.tag && <p className="mb-3.5 text-xs tracking-[.08em] text-neutral-500 uppercase">{card.tag}</p>}
-            <h2 className="mb-5 font-serif text-2xl leading-tight sm:mb-6 sm:text-[28px] font-bold whitespace-pre-wrap text-ink">{card.title || untitled}</h2>
+            <h2 className="mb-5 font-serif text-2xl leading-tight sm:mb-6 sm:text-[28px] font-bold whitespace-pre-wrap text-ink" dangerouslySetInnerHTML={{ __html: card.title ? toHtml(card.title, card.marks, "title") : untitled }} />
             {revealed ? (
-              <p className="text-base leading-[1.7] whitespace-pre-wrap text-neutral-700 sm:text-[17px] sm:leading-[1.75]">{card.body}</p>
+              <p className="text-base leading-[1.7] whitespace-pre-wrap text-neutral-700 sm:text-[17px] sm:leading-[1.75]" dangerouslySetInnerHTML={{ __html: toHtml(card.body, card.marks, "body") }} />
             ) : (
               <button onClick={() => setRevealed(true)} className="w-full rounded-lg border border-dashed border-neutral-400 bg-neutral-50 p-3.5 text-[15px] text-neutral-500 hover:bg-neutral-100">
                 {t.reveal}
