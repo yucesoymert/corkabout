@@ -1,11 +1,21 @@
 "use client";
 
-import { ArrowLeft, Cards, Copy, Minus, PencilSimple, Plus, SpeakerHigh, Stop, Trash } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowSquareOut, BoundingBox, Cards, Copy, Minus, PencilSimple, Plus, SelectionSlash, SpeakerHigh, Stop, Trash } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import { createCardsAction, deleteCardsAction, moveCardsAction, renameBoardAction, updateCardAction } from "@/app/[lang]/actions";
+import {
+  createCardsAction,
+  createGroupAction,
+  deleteCardsAction,
+  deleteGroupAction,
+  leaveGroupAction,
+  moveCardsAction,
+  renameBoardAction,
+  renameGroupAction,
+  updateCardAction,
+} from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
 import type { Locale } from "@/i18n/locales";
 import { clampZoom, fitView, GRID, masonry, READABLE_ZOOM, snap, tagRows, tidy, toWorld, zoomAt, type Placed, type View } from "@/lib/canvas";
@@ -17,7 +27,8 @@ import { CardMenu, type MenuItem } from "./card-menu";
 import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
 
-export type CardData = { id: string; title: string; body: string; tag: string | null; x: number; y: number; width: number; z: number };
+export type CardData = { id: string; title: string; body: string; tag: string | null; x: number; y: number; width: number; z: number; groupId: string | null };
+export type GroupData = { id: string; title: string };
 type Field = "tag" | "title" | "body";
 type Patch = Partial<Omit<CardData, "id">>;
 type T = Dictionary["board"] & { focus: Dictionary["focus"]; menu: Dictionary["menu"] };
@@ -34,7 +45,7 @@ type Gesture = {
   hold?: Gesture; // touch on a card: pans unless the finger stays still long enough, then becomes this card move
   tap?: { id: string; field: Field; wasSelected: boolean }; // touch: a second tap on a selected card edits it
   group?: Map<string, { x: number; y: number; z: number }>; // moving several selected cards: where each one started, its new z
-  collapse?: string; // plain click on a card of a multi-selection: select only it, unless the click became a drag
+  collapse?: Set<string>; // plain click inside a bigger selection: select just that card (or its group), unless the click became a drag
   base?: Set<string>; // marquee: what was selected before (shift/⌘ adds to it)
   boxes?: { id: string; x: number; y: number; w: number; h: number }[]; // marquee: card rects, measured once
 };
@@ -64,6 +75,7 @@ const patchFor = (g: Gesture, dx: number, dy: number, zoom: number): Patch =>
 export function Board({
   board,
   initialCards,
+  initialGroups,
   locale,
   account,
   languages,
@@ -71,12 +83,15 @@ export function Board({
 }: {
   board: { id: string; title: string };
   initialCards: CardData[];
+  initialGroups: GroupData[];
   locale: Locale;
   account: Account;
   languages: Record<Locale, string>;
   t: T;
 }) {
   const [cards, setCards] = useState(initialCards);
+  const [groups, setGroups] = useState(initialGroups);
+  const [naming, setNaming] = useState<string | null>(null); // a new group's title field gets the focus
   const [title, setTitle] = useState(board.title);
   const [view, setView] = useState<View | null>(null); // null until the saved view is read (localStorage is client-only)
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -203,7 +218,7 @@ export function Board({
   };
   const add = (d: Draft, at?: { x: number; y: number }) => {
     const spot = spotFor(d, at);
-    const card: CardData = { id: crypto.randomUUID(), ...d, x: snap(spot.x), y: snap(spot.y), width: CARD_WIDTH, z: maxZ + 1 };
+    const card: CardData = { id: crypto.randomUUID(), ...d, x: snap(spot.x), y: snap(spot.y), width: CARD_WIDTH, z: maxZ + 1, groupId: null };
     setCards((cs) => [...cs, card]);
     setSelected(new Set([card.id]));
     insert([card]);
@@ -234,10 +249,48 @@ export function Board({
   /** Copies two cells down and to the right, on top of everything, and selected. */
   const duplicate = (list: CardData[]) => {
     if (!list.length) return;
-    const copies = list.map((c, i) => ({ ...c, id: crypto.randomUUID(), x: c.x + 2 * GRID, y: c.y + 2 * GRID, z: maxZ + 1 + i }));
+    const copies = list.map((c, i) => ({ ...c, id: crypto.randomUUID(), x: c.x + 2 * GRID, y: c.y + 2 * GRID, z: maxZ + 1 + i, groupId: null }));
     setCards((cs) => [...cs, ...copies]);
     setSelected(new Set(copies.map((c) => c.id)));
     insert(copies);
+  };
+
+  const membersOf = (gid: string) => cards.filter((c) => c.groupId === gid);
+  /** The group whose cards are exactly the selection, if any. */
+  const wholeGroup = () => {
+    const gid = picked[0]?.groupId;
+    return gid && picked.every((c) => c.groupId === gid) && membersOf(gid).length === picked.length ? gid : null;
+  };
+  const setGroupOf = (list: CardData[], gid: string | null) => {
+    const ids = new Set(list.map((c) => c.id));
+    setCards((cs) => cs.map((c) => (ids.has(c.id) ? { ...c, groupId: gid } : c)));
+  };
+  /** New group around these cards; `g` is passed back by "undo" after ungrouping. */
+  const makeGroup = (list: CardData[], g: GroupData = { id: crypto.randomUUID(), title: "" }) => {
+    if (list.length < 2) return;
+    setGroups((gs) => [...gs.filter((x) => x.id !== g.id), g]);
+    setGroupOf(list, g.id);
+    setSelected(new Set(list.map((c) => c.id)));
+    if (!g.title) setNaming(g.id);
+    call(createGroupAction(board.id, g, list.map((c) => c.id)));
+  };
+  const ungroup = (gid: string) => {
+    const g = groups.find((x) => x.id === gid);
+    const list = membersOf(gid);
+    setGroups((gs) => gs.filter((x) => x.id !== gid));
+    setGroupOf(list, null);
+    call(deleteGroupAction(board.id, gid));
+    if (g) toast(t.ungrouped, { duration: 8000, action: { label: t.undo, onClick: () => makeGroup(list, g) } });
+  };
+  const leaveGroup = (list: CardData[]) => {
+    setGroupOf(list, null);
+    call(leaveGroupAction(board.id, list.map((c) => c.id)));
+  };
+  const renameGroup = (gid: string, value: string) => {
+    const title = value.trim();
+    if (groups.find((g) => g.id === gid)?.title === title) return;
+    setGroups((gs) => gs.map((g) => (g.id === gid ? { ...g, title } : g)));
+    call(renameGroupAction(board.id, gid, title));
   };
 
   // Pointer capture starts only after the pointer really moves, so click/double-click still reach the card.
@@ -276,6 +329,21 @@ export function Board({
         ? { kind: "marquee", ...start, ox: 0, oy: 0, base: additive(e) ? new Set(selected) : new Set(), boxes: rects(cards).map((r, i) => ({ ...r, id: cards[i].id })) }
         : { kind: "pan", ...start, ox: v.x, oy: v.y };
   };
+  /** Move gesture for several cards, brought to the front together in their current stacking order. */
+  const dragAll = (e: React.PointerEvent, ids: Set<string>): Gesture => {
+    const list = cards.filter((c) => ids.has(c.id)).sort((a, b) => a.z - b.z);
+    const group = new Map(list.map((c, i) => [c.id, { x: c.x, y: c.y, z: maxZ + 1 + i }]));
+    return { kind: "move", sx: e.clientX, sy: e.clientY, ox: 0, oy: 0, ow: 0, z: 0, moved: false, group };
+  };
+  /** Pressing a group's frame (not a card in it): select its cards and drag them together. Touch pans as usual. */
+  const startFrame = (e: React.PointerEvent, gid: string) => {
+    if (e.button !== 0 || e.pointerType === "touch") return;
+    e.stopPropagation();
+    (document.activeElement as HTMLElement | null)?.blur();
+    const ids = new Set(membersOf(gid).map((c) => c.id));
+    setSelected(ids);
+    gesture.current = dragAll(e, ids);
+  };
   const startCard = (e: React.PointerEvent, card: CardData, kind: "move" | "resize") => {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -283,17 +351,15 @@ export function Board({
     if (kind === "move" && editing?.id === card.id && field) return; // selecting text
     const move: Gesture = { kind, id: card.id, sx: e.clientX, sy: e.clientY, ox: card.x, oy: card.y, ow: card.width, z: cards.some((c) => c.id !== card.id && c.z >= card.z) ? maxZ + 1 : card.z, moved: false };
     if (e.pointerType !== "touch" || kind === "resize") {
-      // shift/⌘ toggles the card; a plain press keeps a multi-selection so it can be dragged as one
-      const next = additive(e) ? new Set(selected) : selected.has(card.id) ? selected : new Set([card.id]);
+      // A plain press selects the card, or its whole group, and keeps a bigger selection so it can be dragged as one.
+      // shift/⌘ toggles just this card (so ⌘-click picks one card out of a group).
+      const unit = new Set(card.groupId ? membersOf(card.groupId).map((c) => c.id) : [card.id]);
+      const next = additive(e) ? new Set(selected) : selected.has(card.id) ? selected : unit;
       if (additive(e)) next[next.has(card.id) ? "delete" : "add"](card.id);
       setSelected(next);
       if (!next.has(card.id)) return; // shift/⌘ just took it out of the selection
-      if (kind === "move" && next.size > 1) {
-        // brought to the front together, keeping their order among themselves
-        const list = cards.filter((c) => next.has(c.id)).sort((a, b) => a.z - b.z);
-        const group = new Map(list.map((c, i) => [c.id, { x: c.x, y: c.y, z: maxZ + 1 + i }]));
-        gesture.current = { ...move, group, collapse: additive(e) ? undefined : card.id };
-      } else gesture.current = move;
+      if (kind === "move" && next.size > 1) gesture.current = { ...dragAll(e, next), collapse: additive(e) || next === unit ? undefined : unit };
+      else gesture.current = move;
       return;
     }
     // Touch: one finger pans the canvas; holding still on the card picks it up.
@@ -355,7 +421,7 @@ export function Board({
     setBox(null);
     if (g?.moved && g.group) place([...g.group].map(([id, o]) => ({ id, ...shifted(o, e.clientX - g.sx, e.clientY - g.sy), z: o.z })));
     else if (g?.moved && g.id) save(g.id, patchFor(g, e.clientX - g.sx, e.clientY - g.sy, v.zoom));
-    else if (g?.collapse) setSelected(new Set([g.collapse]));
+    else if (g?.collapse) setSelected(g.collapse);
     else if (g && !g.moved && g.tap) {
       const { id, field, wasSelected } = g.tap;
       if (!wasSelected) return setSelected(new Set([id]));
@@ -413,6 +479,12 @@ export function Board({
       if (e.key === "Escape") setSelected(new Set());
       else if (mod && e.key === "a") setSelected(new Set(cards.map((c) => c.id)));
       else if (mod && e.key === "d") duplicate(picked);
+      else if (mod && e.key.toLowerCase() === "g") {
+        const whole = wholeGroup();
+        if (e.shiftKey) {
+          if (whole) ungroup(whole);
+        } else if (!whole) makeGroup(picked);
+      }
       else if (e.key === "Delete" || e.key === "Backspace") remove(picked);
       else if (move && picked.length) {
         const step = e.shiftKey ? 4 * GRID : GRID;
@@ -438,6 +510,7 @@ export function Board({
   const menuItems = (): MenuItem[] => {
     const one = picked.length === 1 ? picked[0] : null;
     const n = { n: picked.length };
+    const whole = wholeGroup();
     return [
       ...(one
         ? [
@@ -445,6 +518,12 @@ export function Board({
             ...(one.title || one.body ? [{ label: t.read, Icon: SpeakerHigh, onSelect: () => speak(one.id, readable(one)) }] : []),
           ]
         : []),
+      ...(picked.length > 1 && !whole ? [{ label: t.group, Icon: BoundingBox, hint: "⌘G", onSelect: () => makeGroup(picked) }] : []),
+      ...(whole
+        ? [{ label: t.ungroup, Icon: SelectionSlash, hint: "⇧⌘G", onSelect: () => ungroup(whole) }]
+        : picked.some((c) => c.groupId)
+          ? [{ label: t.leaveGroup, Icon: ArrowSquareOut, onSelect: () => leaveGroup(picked) }]
+          : []),
       { label: one ? t.duplicate : fill(t.duplicateMany, n), Icon: Copy, hint: "⌘D", onSelect: () => duplicate(picked) },
       { label: one ? t.delete : fill(t.deleteMany, n), Icon: Trash, hint: "⌫", danger: true, onSelect: () => remove(picked) },
     ];
@@ -489,6 +568,46 @@ export function Board({
         onDoubleClick={onDoubleClick}
       >
         <div className="absolute top-0 left-0 origin-top-left" style={{ transform: `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`, transition: glide ? GLIDE : undefined, visibility: view ? undefined : "hidden" }}>
+          {/* Frames read card heights from the DOM, so only in the browser once the view is set (it is null on the server and
+              in the first client render). ponytail: heights of the last render; fine since every save renders again */}
+          {view && groups.map((g) => {
+            const list = membersOf(g.id);
+            if (!list.length) return null; // every card left or was deleted; the row stays for undo
+            const left = Math.min(...list.map((c) => c.x)) - GRID;
+            const top = Math.min(...list.map((c) => c.y)) - GRID;
+            const right = Math.max(...list.map((c) => c.x + c.width)) + GRID;
+            const bottom = Math.max(...list.map((c) => c.y + height(c))) + GRID;
+            const on = list.every((c) => selected.has(c.id));
+            return (
+              <div
+                key={g.id}
+                onPointerDown={(e) => startFrame(e, g.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setSelected(new Set(list.map((c) => c.id)));
+                  setMenu({ x: e.clientX, y: e.clientY });
+                }}
+                className={`absolute cursor-grab rounded-2xl border transition-colors active:cursor-grabbing ${on ? "border-cork" : "border-neutral-300"}`}
+                style={{ left, top, width: right - left, height: bottom - top }}
+              >
+                <input
+                  defaultValue={g.title}
+                  key={g.title}
+                  placeholder={t.untitledGroup}
+                  aria-label={t.groupName}
+                  maxLength={120}
+                  autoFocus={naming === g.id}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onBlur={(e) => {
+                    setNaming(null);
+                    renameGroup(g.id, e.currentTarget.value);
+                  }}
+                  onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && e.currentTarget.blur()}
+                  className="absolute bottom-full left-1 mb-1 w-[calc(100%-0.5rem)] cursor-text bg-transparent text-sm font-medium text-neutral-500 outline-none placeholder:font-normal placeholder:text-neutral-400/60 focus:text-neutral-800"
+                />
+              </div>
+            );
+          })}
           {cards.map((card) => (
             <CardView
               key={card.id}

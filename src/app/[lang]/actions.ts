@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { signOut } from "@/auth";
 import { db } from "@/db";
-import { boards, cards, users } from "@/db/schema";
+import { boards, cardGroups, cards, users } from "@/db/schema";
 import { requireBoard, requireUser } from "@/lib/auth-guard";
 import { ICON_NAMES, TINT_NAMES } from "@/lib/board-look";
 import { MAX_BOARDS, MAX_CARDS } from "@/lib/limits";
@@ -24,7 +24,7 @@ const cardFields = z.object({
   width: z.number().int().min(160).max(1_200),
   z: z.number().int().min(0).max(1_000_000_000),
 });
-const newCard = cardFields.extend({ id: z.uuid() });
+const newCard = cardFields.extend({ id: z.uuid(), groupId: z.uuid().nullable().optional() }); // groupId: undo puts a card back in its frame
 const boardTitle = z.string().trim().min(1).max(120);
 
 const ownBoards = (userId: string) => db.select({ id: boards.id }).from(boards).where(eq(boards.userId, userId));
@@ -86,7 +86,11 @@ export async function createCardsAction(boardId: string, list: z.input<typeof ne
   const parsed = newCards.safeParse(list);
   if (!parsed.success) return false;
   if ((await cardCount(board.userId)) + parsed.data.length > MAX_CARDS) return "limit";
-  await db.insert(cards).values(parsed.data.map((c) => ({ ...c, boardId: board.id }))).onConflictDoNothing();
+  const own = new Set((await db.select({ id: cardGroups.id }).from(cardGroups).where(eq(cardGroups.boardId, board.id))).map((g) => g.id));
+  await db
+    .insert(cards)
+    .values(parsed.data.map((c) => ({ ...c, groupId: c.groupId && own.has(c.groupId) ? c.groupId : null, boardId: board.id })))
+    .onConflictDoNothing();
   return true;
 }
 
@@ -124,5 +128,46 @@ export async function deleteCardsAction(boardId: string, list: string[]) {
   const parsed = ids.safeParse(list);
   if (!parsed.success) return false;
   await db.delete(cards).where(and(inArray(cards.id, parsed.data), eq(cards.boardId, board.id)));
+  return true;
+}
+
+// ===== Groups: a named frame around some cards (src/db/schema.ts cardGroups) =====
+const groupTitle = z.string().trim().max(120);
+
+/** Also "undo" after ungrouping: the same id and title come back. Cards in another group move to this one. */
+export async function createGroupAction(boardId: string, group: { id: string; title: string }, cardIds: string[]) {
+  const board = await requireBoard(boardId);
+  const parsed = z.object({ id: z.uuid(), title: groupTitle }).safeParse(group);
+  const members = ids.safeParse(cardIds);
+  if (!parsed.success || !members.success) return false;
+  await db.transaction(async (tx) => {
+    await tx.insert(cardGroups).values({ ...parsed.data, boardId: board.id }).onConflictDoNothing();
+    await tx.update(cards).set({ groupId: parsed.data.id }).where(and(inArray(cards.id, members.data), eq(cards.boardId, board.id)));
+  });
+  return true;
+}
+
+export async function renameGroupAction(boardId: string, id: string, title: string) {
+  const board = await requireBoard(boardId);
+  const parsed = groupTitle.safeParse(title);
+  if (!parsed.success || !z.uuid().safeParse(id).success) return false;
+  await db.update(cardGroups).set({ title: parsed.data }).where(and(eq(cardGroups.id, id), eq(cardGroups.boardId, board.id)));
+  return true;
+}
+
+/** Ungroup: the cards stay where they are (group_id is set null by the foreign key). */
+export async function deleteGroupAction(boardId: string, id: string) {
+  const board = await requireBoard(boardId);
+  if (!z.uuid().safeParse(id).success) return false;
+  await db.delete(cardGroups).where(and(eq(cardGroups.id, id), eq(cardGroups.boardId, board.id)));
+  return true;
+}
+
+/** "Remove from group" for some cards. */
+export async function leaveGroupAction(boardId: string, cardIds: string[]) {
+  const board = await requireBoard(boardId);
+  const parsed = ids.safeParse(cardIds);
+  if (!parsed.success) return false;
+  await db.update(cards).set({ groupId: null }).where(and(inArray(cards.id, parsed.data), eq(cards.boardId, board.id)));
   return true;
 }

@@ -50,6 +50,18 @@ export const boards = pgTable(
   (t) => [index("board_user_idx").on(t.userId)],
 );
 
+// A named frame around some cards of a board. It has no position of its own: the frame is drawn around its cards.
+export const cardGroups = pgTable(
+  "card_group",
+  {
+    id: uuid("id").primaryKey(), // made in the browser, like card ids
+    boardId: uuid("board_id").notNull().references(() => boards.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default(""),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("card_group_board_idx").on(t.boardId)],
+);
+
 // Positions are world pixels on the board's canvas; z is the stacking order (higher = on top).
 export const cards = pgTable(
   "card",
@@ -59,6 +71,7 @@ export const cards = pgTable(
     title: text("title").notNull().default(""),
     body: text("body").notNull().default(""),
     tag: text("tag"), // the filter chip in the board's top bar
+    groupId: uuid("group_id").references(() => cardGroups.id, { onDelete: "set null" }), // ungrouping deletes the group row
     x: integer("x").notNull(),
     y: integer("y").notNull(),
     width: integer("width").notNull(),

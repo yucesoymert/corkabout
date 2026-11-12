@@ -3,7 +3,7 @@ import type { Viewport } from "next";
 import { Suspense } from "react";
 import { Board } from "@/components/board";
 import { db } from "@/db";
-import { cards } from "@/db/schema";
+import { cardGroups, cards } from "@/db/schema";
 import { getDictionary, getLocale } from "@/i18n";
 import { requireBoard, requireUser } from "@/lib/auth-guard";
 
@@ -21,14 +21,18 @@ export default function BoardPage({ params }: PageProps<"/[lang]/b/[id]">) {
 async function BoardLoader({ params }: { params: PageProps<"/[lang]/b/[id]">["params"] }) {
   const { id } = await params;
   const [board, user, t, locale] = await Promise.all([requireBoard(id), requireUser(), getDictionary(), getLocale()]);
-  const rows = await db
-    .select({ id: cards.id, title: cards.title, body: cards.body, tag: cards.tag, x: cards.x, y: cards.y, width: cards.width, z: cards.z })
-    .from(cards)
-    .where(eq(cards.boardId, board.id));
+  const [rows, groups] = await Promise.all([
+    db
+      .select({ id: cards.id, title: cards.title, body: cards.body, tag: cards.tag, x: cards.x, y: cards.y, width: cards.width, z: cards.z, groupId: cards.groupId })
+      .from(cards)
+      .where(eq(cards.boardId, board.id)),
+    db.select({ id: cardGroups.id, title: cardGroups.title }).from(cardGroups).where(eq(cardGroups.boardId, board.id)),
+  ]);
   return (
     <Board
       board={{ id: board.id, title: board.title }}
       initialCards={rows}
+      initialGroups={groups}
       locale={locale}
       account={{ name: user.name ?? "", email: user.email ?? "", image: user.image ?? null }}
       languages={t.language}
