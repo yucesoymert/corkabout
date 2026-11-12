@@ -1,5 +1,5 @@
 // Adds a board from a JSON file: { title, icon?, color?, cards: [{ tag, title, answer }] }. One column per tag.
-// Usage: pnpm import-board scripts/boards/board.json --email you@gmail.com   (sign in once with Google first)
+// Usage: pnpm import-board ~/Documents/corkabout-boards/board.json --email you@gmail.com   (sign in once with Google first)
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
