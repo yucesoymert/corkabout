@@ -37,6 +37,48 @@
   --color-neutral-950: #faf8f4;
 }
 
+/* Coloured parts of card text (src/lib/marks.ts). Text colours are dark enough for the white card (yellow-700 and
+ * friends, ≥4.5:1), light ones on the dark card; highlights are pastel in light mode, see-through in dark mode. */
+:root {
+  --mark-yellow-fg: #a16207;
+  --mark-green-fg: #15803d;
+  --mark-blue-fg: #1d4ed8;
+  --mark-pink-fg: #be185d;
+  --mark-red-fg: #b91c1c;
+  --mark-yellow-hl: #fef08a;
+  --mark-green-hl: #bbf7d0;
+  --mark-blue-hl: #bfdbfe;
+  --mark-pink-hl: #fbcfe8;
+  --mark-red-hl: #fecaca;
+}
+.dark {
+  --mark-yellow-fg: #facc15;
+  --mark-green-fg: #4ade80;
+  --mark-blue-fg: #60a5fa;
+  --mark-pink-fg: #f472b6;
+  --mark-red-fg: #f87171;
+  --mark-yellow-hl: rgb(250 204 21 / 0.3);
+  --mark-green-hl: rgb(74 222 128 / 0.28);
+  --mark-blue-hl: rgb(96 165 250 / 0.3);
+  --mark-pink-hl: rgb(244 114 182 / 0.3);
+  --mark-red-hl: rgb(248 113 113 / 0.3);
+}
+[data-hl] {
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+[data-fg="yellow"] { color: var(--mark-yellow-fg); }
+[data-fg="green"] { color: var(--mark-green-fg); }
+[data-fg="blue"] { color: var(--mark-blue-fg); }
+[data-fg="pink"] { color: var(--mark-pink-fg); }
+[data-fg="red"] { color: var(--mark-red-fg); }
+[data-hl="yellow"] { background-color: var(--mark-yellow-hl); }
+[data-hl="green"] { background-color: var(--mark-green-hl); }
+[data-hl="blue"] { background-color: var(--mark-blue-hl); }
+[data-hl="pink"] { background-color: var(--mark-pink-hl); }
+[data-hl="red"] { background-color: var(--mark-red-hl); }
+
 /* Dot grid of the board canvas; size and offset follow pan/zoom through these variables. */
 .canvas-dots {
   background-color: var(--color-paper);

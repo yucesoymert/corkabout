@@ -1,4 +1,5 @@
-import { index, integer, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import type { Mark } from "@/lib/marks";
 
 // ===== Auth.js (@auth/drizzle-adapter default shape) =====
 export const users = pgTable("user", {
@@ -71,6 +72,7 @@ export const cards = pgTable(
     title: text("title").notNull().default(""),
     body: text("body").notNull().default(""),
     tag: text("tag"), // the filter chip in the board's top bar
+    marks: jsonb("marks").$type<Mark[]>().notNull().default([]), // coloured parts of title/body, see src/lib/marks.ts
     groupId: uuid("group_id").references(() => cardGroups.id, { onDelete: "set null" }), // ungrouping deletes the group row
     x: integer("x").notNull(),
     y: integer("y").notNull(),

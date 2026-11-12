@@ -1,0 +1,1 @@
+ALTER TABLE "card" ADD COLUMN "marks" jsonb DEFAULT '[]'::jsonb NOT NULL;

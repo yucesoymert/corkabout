@@ -10,11 +10,15 @@ import { boards, cardGroups, cards, users } from "@/db/schema";
 import { requireBoard, requireUser } from "@/lib/auth-guard";
 import { ICON_NAMES, TINT_NAMES } from "@/lib/board-look";
 import { MAX_BOARDS, MAX_CARDS } from "@/lib/limits";
+import { COLORS } from "@/lib/marks";
 
 // Session + validation at the trust boundary. Card actions return false instead of throwing,
 // the board shows a "couldn't save" toast and keeps the local state.
 
 const coord = z.number().int().min(-1_000_000).max(1_000_000);
+const mark = z
+  .object({ f: z.enum(["title", "body"]), s: z.number().int().min(0), e: z.number().int().max(10_000), c: z.enum(COLORS), k: z.enum(["fg", "hl"]) })
+  .refine((m) => m.e > m.s);
 const cardFields = z.object({
   title: z.string().max(1_000),
   body: z.string().max(10_000),
@@ -23,6 +27,7 @@ const cardFields = z.object({
   y: coord,
   width: z.number().int().min(160).max(1_200),
   z: z.number().int().min(0).max(1_000_000_000),
+  marks: z.array(mark).max(200),
 });
 const newCard = cardFields.extend({ id: z.uuid(), groupId: z.uuid().nullable().optional() }); // groupId: undo puts a card back in its frame
 const boardTitle = z.string().trim().min(1).max(120);
