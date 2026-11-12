@@ -587,7 +587,7 @@ export function Board({
                   setSelected(new Set(list.map((c) => c.id)));
                   setMenu({ x: e.clientX, y: e.clientY });
                 }}
-                className={`absolute cursor-grab rounded-2xl border transition-colors active:cursor-grabbing ${on ? "border-cork bg-cork/10" : "border-neutral-300 bg-neutral-500/5"}`}
+                className={`absolute cursor-grab rounded-2xl border transition-colors active:cursor-grabbing ${on ? "border-cork" : "border-neutral-300"}`}
                 style={{ left, top, width: right - left, height: bottom - top }}
               >
                 <input
