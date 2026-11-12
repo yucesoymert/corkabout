@@ -56,6 +56,7 @@ const typing = (el: EventTarget | null) => el instanceof HTMLElement && (el.isCo
 const HOLD_MS = 350;
 
 const CARD_WIDTH = 12 * GRID;
+const CARD_RADIUS = 6; // a group frame is rounded by this plus its padding, so the corners run parallel
 const GLIDE = "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)";
 const DOTS_GLIDE = ["background-size", "background-position"].map((p) => GLIDE.replace("transform", p)).join(", ");
 const viewKey = (boardId: string) => `corkabout:view:${boardId}`;
@@ -646,8 +647,8 @@ export function Board({
                   setSelected(new Set(list.map((c) => c.id)));
                   setMenu({ x: e.clientX, y: e.clientY });
                 }}
-                className={`absolute cursor-grab rounded-2xl border transition-colors active:cursor-grabbing ${on ? "border-cork" : "border-neutral-300"}`}
-                style={{ left, top, width: right - left, height: bottom - top }}
+                className={`absolute cursor-grab border transition-colors active:cursor-grabbing ${on ? "border-cork" : "border-neutral-300"}`}
+                style={{ left, top, width: right - left, height: bottom - top, borderRadius: CARD_RADIUS + pad }}
               >
                 <input
                   defaultValue={g.title}
@@ -860,8 +861,8 @@ function CardView({
       tabIndex={0}
       aria-label={fill(t.card, { title: card.title || t.untitledCard })}
       aria-description={t.cardHelp}
-      style={{ left: card.x, top: card.y, width: card.width, zIndex: card.z }}
-      className={`group absolute rounded-md bg-white transition-[box-shadow,opacity] outline-none ${
+      style={{ left: card.x, top: card.y, width: card.width, zIndex: card.z, borderRadius: CARD_RADIUS }}
+      className={`group absolute bg-white transition-[box-shadow,opacity] outline-none ${
         selected ? "shadow-lg ring-2 ring-cork" : "shadow-[0_1px_3px_rgba(0,0,0,.08)] hover:shadow-md dark:ring-1 dark:ring-neutral-200"
       } ${dim ? "opacity-20" : ""} ${editing ? "" : "cursor-grab active:cursor-grabbing"}`}
       onPointerDown={(e) => onPointerDown(e, "move")}
