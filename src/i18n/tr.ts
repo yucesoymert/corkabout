@@ -75,6 +75,7 @@ export const tr = {
     duplicate: "Çoğalt",
     duplicateMany: "{n} kartı çoğalt",
     undo: "Geri al",
+    undoHint: "⌘Z / Ctrl+Z ile de geri alabilirsin",
     saveFailed: "Kaydedilemedi. Bağlantını kontrol edip tekrar dene.",
     cardLimit: "En fazla {n} kart ekleyebilirsin. Yenisi için birkaç kartı sil.",
     newCard: "Yeni kart",
