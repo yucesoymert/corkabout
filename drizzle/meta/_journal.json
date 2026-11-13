@@ -29,6 +29,20 @@
       "when": 1794507073521,
       "tag": "0003_shocking_quasimodo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794553044121,
+      "tag": "0004_blue_arclight",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794553294895,
+      "tag": "0005_right_northstar",
+      "breakpoints": true
     }
   ]
 }

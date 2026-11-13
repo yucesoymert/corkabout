@@ -26,7 +26,7 @@ async function BoardLoader({ params }: { params: PageProps<"/[lang]/b/[id]">["pa
       .select({ id: cards.id, title: cards.title, body: cards.body, tag: cards.tag, x: cards.x, y: cards.y, width: cards.width, z: cards.z, groupId: cards.groupId, marks: cards.marks })
       .from(cards)
       .where(eq(cards.boardId, board.id)),
-    db.select({ id: cardGroups.id, title: cardGroups.title }).from(cardGroups).where(eq(cardGroups.boardId, board.id)),
+    db.select({ id: cardGroups.id, title: cardGroups.title, color: cardGroups.color, fill: cardGroups.fill, fillOpacity: cardGroups.fillOpacity }).from(cardGroups).where(eq(cardGroups.boardId, board.id)),
   ]);
   return (
     <Board

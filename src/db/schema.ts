@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import type { Mark } from "@/lib/marks";
 
 // ===== Auth.js (@auth/drizzle-adapter default shape) =====
@@ -58,6 +58,9 @@ export const cardGroups = pgTable(
     id: uuid("id").primaryKey(), // made in the browser, like card ids
     boardId: uuid("board_id").notNull().references(() => boards.id, { onDelete: "cascade" }),
     title: text("title").notNull().default(""),
+    color: text("color"), // a name from COLORS in src/lib/marks.ts: border and title; null = grey
+    fill: boolean("fill").notNull().default(false), // the inside of the frame is tinted too
+    fillOpacity: integer("fill_opacity").notNull().default(50), // percent of the tint, 10-100
     updatedAt: updatedAt(),
   },
   (t) => [index("card_group_board_idx").on(t.boardId)],

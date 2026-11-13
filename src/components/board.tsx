@@ -13,14 +13,14 @@ import {
   leaveGroupAction,
   moveCardsAction,
   renameBoardAction,
-  renameGroupAction,
+  updateGroupAction,
   updateCardAction,
 } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
 import type { Locale } from "@/i18n/locales";
 import { clampZoom, fitView, GRID, masonry, READABLE_ZOOM, snap, tagRows, tidy, toWorld, zoomAt, type Placed, type View } from "@/lib/canvas";
 import { fill } from "@/lib/format";
-import { type Color, type Kind, type Mark, type MarkField, fromChars, normalize, paint, readField, selectRange, toHtml } from "@/lib/marks";
+import { type Color, COLORS, type Kind, type Mark, type MarkField, fromChars, normalize, paint, readField, selectRange, toHtml } from "@/lib/marks";
 import { MAX_CARDS } from "@/lib/limits";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
 import { type Account, type Arrangement, BoardMenu } from "./board-menu";
@@ -30,7 +30,7 @@ import { Focus } from "./focus";
 import { MarkBar } from "./mark-bar";
 
 export type CardData = { id: string; title: string; body: string; tag: string | null; x: number; y: number; width: number; z: number; groupId: string | null; marks: Mark[] };
-export type GroupData = { id: string; title: string };
+export type GroupData = { id: string; title: string; color: string | null; fill: boolean; fillOpacity: number }; // color: a name from COLORS; fillOpacity: percent
 type Field = "tag" | "title" | "body";
 type Patch = Partial<Omit<CardData, "id">>;
 type T = Dictionary["board"] & { focus: Dictionary["focus"]; menu: Dictionary["menu"] };
@@ -121,6 +121,7 @@ export function Board({
   const [focusOpen, setFocusOpen] = useState(false);
   const [composing, setComposing] = useState<{ at?: { x: number; y: number } } | null>(null); // new-card dialog; `at` = double-clicked world point
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null); // right-click menu, acts on the selection
+  const [looking, setLooking] = useState<{ gid: string; x: number; y: number } | null>(null); // a group's colour picker
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null); // marquee, screen pixels
   const [spaceHeld, setSpaceHeld] = useState(false); // Space + drag pans, like design tools
   const menuOpen = useRef(false);
@@ -286,8 +287,9 @@ export function Board({
     setCards((cs) => cs.map((c) => (ids.has(c.id) ? { ...c, groupId: gid } : c)));
   };
   /** New group around these cards; `g` is passed back by "undo" after ungrouping. */
-  const makeGroup = (list: CardData[], g: GroupData = { id: crypto.randomUUID(), title: "" }) => {
+  const makeGroup = (list: CardData[], from: Partial<GroupData> = {}) => {
     if (list.length < 2) return;
+    const g: GroupData = { id: crypto.randomUUID(), title: "", color: null, fill: false, fillOpacity: 50, ...from }; // undo entries from before colours lack color/fill
     setGroups((gs) => [...gs.filter((x) => x.id !== g.id), g]);
     setGroupOf(list, g.id);
     setSelected(new Set(list.map((c) => c.id)));
@@ -306,11 +308,13 @@ export function Board({
     setGroupOf(list, null);
     call(leaveGroupAction(board.id, list.map((c) => c.id)));
   };
+  const updateGroup = (gid: string, patch: Partial<Omit<GroupData, "id">>) => {
+    setGroups((gs) => gs.map((g) => (g.id === gid ? { ...g, ...patch } : g)));
+    call(updateGroupAction(board.id, gid, patch));
+  };
   const renameGroup = (gid: string, value: string) => {
     const title = value.trim();
-    if (groups.find((g) => g.id === gid)?.title === title) return;
-    setGroups((gs) => gs.map((g) => (g.id === gid ? { ...g, title } : g)));
-    call(renameGroupAction(board.id, gid, title));
+    if (groups.find((g) => g.id === gid)?.title !== title) updateGroup(gid, { title });
   };
 
   // Pointer capture starts only after the pointer really moves, so click/double-click still reach the card.
@@ -647,8 +651,17 @@ export function Board({
                   setSelected(new Set(list.map((c) => c.id)));
                   setMenu({ x: e.clientX, y: e.clientY });
                 }}
-                className={`absolute cursor-grab border transition-colors active:cursor-grabbing ${on ? "border-cork" : "border-neutral-300"}`}
-                style={{ left, top, width: right - left, height: bottom - top, borderRadius: CARD_RADIUS + pad }}
+                className={`absolute cursor-grab transition-colors active:cursor-grabbing ${on && g.color ? "border-2" : "border"} ${on ? "border-cork" : "border-neutral-300"}`}
+                style={{
+                  left,
+                  top,
+                  width: right - left,
+                  height: bottom - top,
+                  borderRadius: CARD_RADIUS + pad,
+                  zIndex: Math.min(...list.map((c) => c.z)), // right under its own cards (same z, earlier in the DOM), over cards stacked lower
+                  borderColor: g.color ? `var(--mark-${g.color}-fg)` : undefined,
+                  background: g.color && g.fill ? `color-mix(in oklab, var(--mark-${g.color}-hl) ${g.fillOpacity}%, transparent)` : undefined,
+                }}
               >
                 <input
                   defaultValue={g.title}
@@ -663,8 +676,24 @@ export function Board({
                     renameGroup(g.id, e.currentTarget.value);
                   }}
                   onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && e.currentTarget.blur()}
-                  className="absolute bottom-full left-1 mb-1 w-[calc(100%-0.5rem)] cursor-text bg-transparent text-sm font-medium text-neutral-500 outline-none placeholder:font-normal placeholder:text-neutral-400/60 focus:text-neutral-800"
+                  style={g.color ? { color: `var(--mark-${g.color}-fg)` } : undefined}
+                  className={`absolute bottom-full left-1 mb-1 w-[calc(100%-0.5rem)] cursor-text bg-transparent text-sm font-medium text-neutral-500 outline-none placeholder:font-normal placeholder:text-neutral-400/60 focus:text-neutral-800 ${on ? "pr-7" : ""}`}
                 />
+                {on && (
+                  <button
+                    aria-label={t.groupColor}
+                    title={t.groupColor}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setLooking({ gid: g.id, x: r.right, y: r.bottom + 4 });
+                    }}
+                    className="absolute right-1 bottom-full mb-1 grid size-6 place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-neutral-900"
+                    style={g.color ? { color: `var(--mark-${g.color}-fg)` } : undefined}
+                  >
+                    <PencilSimple className="size-4" aria-hidden />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -749,6 +778,9 @@ export function Board({
 
       <BoardMenu account={account} boardId={board.id} locale={locale} languages={languages} t={t.menu} onArrange={arrange} />
       {menu && <CardMenu at={menu} items={menuItems()} onClose={() => setMenu(null)} />}
+      {looking && groups.some((g) => g.id === looking.gid) && (
+        <GroupLook at={looking} group={groups.find((g) => g.id === looking.gid)!} t={t} onChange={(p) => updateGroup(looking.gid, p)} onClose={() => setLooking(null)} />
+      )}
       {editing && <MarkBar cardId={editing.id} t={t} onApply={applyMark} />}
       {composing && <Composer tags={tags} tag={activeTag} t={t} onAdd={(d) => add(d, composing.at)} onClose={() => setComposing(null)} />}
       {focusOpen && <Focus cards={ordered.filter(matches)} t={t.focus} untitled={t.untitledCard} onClose={() => setFocusOpen(false)} />}
@@ -907,6 +939,60 @@ function CardView({
         </button>
       )}
       <div aria-hidden title={t.resize} onPointerDown={(e) => onPointerDown(e, "resize")} className="absolute top-0 -right-1.5 h-full w-3 cursor-ew-resize" />
+    </div>
+  );
+}
+
+/** A group's colour (border and title) and whether its inside is tinted too. Every pick applies right away.
+ * Native popover like CardMenu: light dismiss and Esc for free. */
+function GroupLook({ at, group, t, onChange, onClose }: { at: { x: number; y: number }; group: GroupData; t: T; onChange: (p: Partial<GroupData>) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current!;
+    el.showPopover();
+    el.style.left = `${Math.max(8, Math.min(at.x - el.offsetWidth, innerWidth - el.offsetWidth - 8))}px`; // right edge under the pencil
+    el.style.top = `${Math.min(at.y, innerHeight - el.offsetHeight - 8)}px`;
+    el.querySelector<HTMLInputElement>("input:checked")?.focus();
+  }, [at]);
+  const swatch =
+    "grid size-7 place-items-center rounded-full ring-1 ring-black/10 peer-checked:ring-2 peer-checked:ring-neutral-900 peer-checked:ring-offset-2 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-neutral-900";
+  return (
+    <div
+      ref={ref}
+      popover="auto"
+      role="dialog"
+      aria-label={t.groupColor}
+      onToggle={(e) => e.newState === "closed" && onClose()}
+      className="fixed inset-auto m-0 flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-3 text-sm text-neutral-800 shadow-xl"
+    >
+      <div role="radiogroup" aria-label={t.groupColor} className="flex gap-2">
+        {[null, ...COLORS].map((c) => (
+          <label key={c ?? "none"} title={c ? t.color[c] : t.noColor} className="cursor-pointer">
+            <input type="radio" name="group-color" checked={group.color === c} onChange={() => onChange({ color: c })} aria-label={c ? t.color[c] : t.noColor} className="peer sr-only" />
+            <span className={swatch} style={{ background: c ? `var(--mark-${c}-fg)` : undefined }}>
+              {!c && <span className="h-px w-4 rotate-45 bg-neutral-400" aria-hidden />}
+            </span>
+          </label>
+        ))}
+      </div>
+      <label className={`flex items-center gap-2 ${group.color ? "cursor-pointer" : "opacity-50"}`}>
+        <input type="checkbox" checked={group.fill} disabled={!group.color} onChange={(e) => onChange({ fill: e.currentTarget.checked })} className="accent-neutral-900" />
+        {t.groupFill}
+      </label>
+      {group.color && group.fill && (
+        <input
+          type="range"
+          min={10}
+          max={100}
+          step={5}
+          // ponytail: saves on every step of the drag; fine at 19 steps, debounce if it ever floods
+          value={group.fillOpacity}
+          onChange={(e) => onChange({ fillOpacity: e.currentTarget.valueAsNumber })}
+          aria-label={t.groupFillOpacity}
+          title={`${group.fillOpacity}%`}
+          className="accent-neutral-900"
+        />
+      )}
     </div>
   );
 }
