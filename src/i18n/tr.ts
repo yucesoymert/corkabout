@@ -6,8 +6,8 @@ export const tr = {
   },
   language: { tr: "Türkçe", en: "English" },
   login: {
-    title: "Corkabout'a hoş geldin",
-    body: "Kartlarını sınırsız bir panoya diz, istediğin yere taşı. Devam etmek için Google hesabınla giriş yap.",
+    title: "Hoş geldin",
+    body: "Notların ve fikirlerin için bir alan.",
     google: "Google ile giriş yap",
   },
   home: {
