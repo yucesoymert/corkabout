@@ -727,7 +727,7 @@ export function Board({
       {/* Phones: one row of controls, the tag chips on their own full-width row below. sm+: one centred pill. */}
       <div className="pointer-events-none fixed top-3 right-14 left-3 z-10 flex flex-col gap-2 sm:inset-x-14 sm:items-center">
         <div className="pointer-events-auto flex h-10 min-w-0 items-center gap-1 rounded-full border border-neutral-200 bg-white/90 px-1 shadow-sm backdrop-blur sm:h-9 sm:max-w-4xl">
-          <Link href={`/${locale}`} aria-label={t.back} title={t.back} className="grid size-8 shrink-0 place-items-center rounded-full text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 sm:size-7">
+          <Link href={`/${locale}`} aria-label={t.back} title={t.back} className="grid size-8 shrink-0 place-items-center rounded-full text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900 active:scale-90 sm:size-7">
             <ArrowLeft className="size-4" aria-hidden />
           </Link>
           <input
@@ -755,7 +755,7 @@ export function Board({
             <Cards className="size-4 sm:size-3.5" aria-hidden />
             <span className="hidden sm:inline">{t.focusMode}</span>
           </button>
-          <button onClick={() => setComposing({})} aria-label={t.addCard} title={t.addCard} className="grid size-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-white hover:bg-neutral-700 sm:size-7">
+          <button onClick={() => setComposing({})} aria-label={t.addCard} title={t.addCard} className="grid size-8 shrink-0 place-items-center rounded-full bg-neutral-900 text-white transition hover:bg-neutral-700 active:scale-90 sm:size-7">
             <Plus weight="bold" className="size-3.5" aria-hidden />
           </button>
         </div>

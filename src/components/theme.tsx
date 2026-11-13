@@ -46,15 +46,22 @@ export function ThemeToggle({ label }: { label: string }) {
 /** Light / Dark / System segmented control (board menu and settings). */
 export function ThemePicker({ labels }: { labels: Record<ThemeChoice, string> }) {
   const choice = useThemeChoice();
+  const choices = ["light", "dark", "system"] as const;
   return (
-    <div role="radiogroup" className="grid grid-cols-3 gap-1 rounded-lg bg-neutral-100 p-1 text-xs">
-      {(["light", "dark", "system"] as const).map((c) => (
+    <div role="radiogroup" className="relative grid grid-cols-3 gap-1 rounded-lg bg-neutral-100 p-1 text-xs">
+      {/* One white pill under the picked option, slid from column to column: one column wide, one gap (0.25rem) per step */}
+      <span
+        aria-hidden
+        className="absolute inset-y-1 left-1 w-[calc((100%-1rem)/3)] rounded-md bg-white shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none"
+        style={{ transform: `translateX(calc(${choices.indexOf(choice)} * (100% + 0.25rem)))` }}
+      />
+      {choices.map((c) => (
         <button
           key={c}
           role="radio"
           aria-checked={choice === c}
           onClick={() => setTheme(c)}
-          className="rounded-md px-2 py-1.5 text-neutral-600 hover:text-neutral-900 aria-checked:bg-white aria-checked:font-medium aria-checked:text-neutral-900 aria-checked:shadow-sm"
+          className="relative rounded-md px-2 py-1.5 text-neutral-600 hover:text-neutral-900 aria-checked:font-medium aria-checked:text-neutral-900"
         >
           {labels[c]}
         </button>

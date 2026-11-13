@@ -3,6 +3,29 @@
 /* Dark mode = `dark` class on <html>, set before paint by the script in [lang]/layout.tsx (system setting or the toggle). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Press feel for every button: a quick squeeze on press, a small spring back on release. In the base layer, so a
+ * button's own transition-* or active:scale-* class wins. ponytail: one rule here instead of a class on every button. */
+@layer base {
+  button {
+    -webkit-tap-highlight-color: transparent; /* the squeeze is the feedback on touch screens */
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    button:not(:disabled) {
+      transition:
+        scale 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+        color 150ms,
+        background-color 150ms,
+        border-color 150ms,
+        box-shadow 150ms,
+        opacity 150ms;
+    }
+    button:not(:disabled):active {
+      scale: 0.96;
+      transition-duration: 70ms; /* press fast, release on the spring above */
+    }
+  }
+}
+
 @theme {
   --color-paper: #f4f3f0;
   --color-cork: #a8754a;
