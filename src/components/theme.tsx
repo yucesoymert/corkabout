@@ -27,6 +27,8 @@ const subscribe = (cb: () => void) => {
 export const useThemeChoice = () => useSyncExternalStore(subscribe, stored, () => "system" as ThemeChoice);
 const useDark = () => useSyncExternalStore(subscribe, () => document.documentElement.classList.contains("dark"), () => false);
 
+const ICON = "col-start-1 row-start-1 size-4 transition-[rotate,scale,opacity] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:transition-none";
+
 /** Dashboard header button: flips between light and dark. */
 export function ThemeToggle({ label }: { label: string }) {
   // Both icons rendered, CSS picks one: the server can't know the theme, so nothing here depends on it.
@@ -35,10 +37,12 @@ export function ThemeToggle({ label }: { label: string }) {
       onClick={() => setTheme(document.documentElement.classList.contains("dark") ? "light" : "dark")}
       aria-label={label}
       title={label}
-      className="grid size-8 place-items-center rounded-full text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900"
+      className="grid size-8 place-items-center overflow-hidden rounded-full text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900"
     >
-      <Moon className="size-4 dark:hidden" aria-hidden />
-      <Sun className="hidden size-4 dark:block" aria-hidden />
+      {/* Stacked in one cell: the moon spins out as the sun spins in (and back), on the springy curve the buttons use.
+          On load the dark class is set before paint, so nothing animates then. */}
+      <Moon className={`${ICON} dark:-rotate-90 dark:scale-0 dark:opacity-0`} aria-hidden />
+      <Sun className={`${ICON} rotate-90 scale-0 opacity-0 dark:rotate-0 dark:scale-100 dark:opacity-100`} aria-hidden />
     </button>
   );
 }
