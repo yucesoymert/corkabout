@@ -1,5 +1,4 @@
 import { GoogleLogo } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { signIn } from "@/auth";
@@ -35,9 +34,10 @@ export default async function LoginPage() {
         </form>
         <nav className="mt-6 flex justify-center gap-4 text-sm text-neutral-500">
           {locales.map((l) => (
-            <Link key={l} href={`/${l}/login`} aria-current={l === locale ? "page" : undefined} className="hover:text-neutral-900 aria-[current=page]:font-semibold aria-[current=page]:text-neutral-900">
+            // <a>, not <Link>: another language is another root layout. A full load keeps React from re-creating the theme <script> in <head>.
+            <a key={l} href={`/${l}/login`} aria-current={l === locale ? "page" : undefined} className="hover:text-neutral-900 aria-[current=page]:font-semibold aria-[current=page]:text-neutral-900">
               {t.language[l]}
-            </Link>
+            </a>
           ))}
         </nav>
       </div>

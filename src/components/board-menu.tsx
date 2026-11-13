@@ -1,7 +1,6 @@
 "use client";
 
 import { DotsThreeVertical, GearSix, Keyboard, Rows, SignOut, SquaresFour, SortAscending, Columns } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { signOutAction, updateNameAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
@@ -252,14 +251,15 @@ export function BoardMenu({ account, boardId, locale, languages, t, onArrange }:
         <p className="mt-4 text-sm font-medium">{t.language}</p>
         <nav className="mt-1.5 grid grid-cols-2 gap-1 rounded-lg bg-neutral-100 p-1 text-sm">
           {(Object.keys(languages) as Locale[]).map((l) => (
-            <Link
+            // <a>, not <Link>: another language is another root layout. A full load keeps React from re-creating the theme <script> in <head>.
+            <a
               key={l}
               href={`/${l}/b/${boardId}`}
               aria-current={l === locale ? "true" : undefined}
               className="rounded-md px-2 py-1.5 text-center text-neutral-600 hover:text-neutral-900 aria-[current=true]:bg-white aria-[current=true]:font-medium aria-[current=true]:text-neutral-900 aria-[current=true]:shadow-sm"
             >
               {languages[l]}
-            </Link>
+            </a>
           ))}
         </nav>
 
