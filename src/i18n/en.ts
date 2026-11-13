@@ -7,8 +7,8 @@ export const en: Dictionary = {
   },
   language: { tr: "Türkçe", en: "English" },
   login: {
-    title: "Welcome to Corkabout",
-    body: "Pin your cards on an endless board and move them anywhere. Sign in with your Google account to continue.",
+    title: "Welcome",
+    body: "A space for your notes and ideas.",
     google: "Sign in with Google",
   },
   home: {
