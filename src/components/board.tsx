@@ -23,7 +23,7 @@ import { fill } from "@/lib/format";
 import { type Color, COLORS, type Kind, type Mark, type MarkField, fromChars, normalize, paint, readField, selectRange, toHtml } from "@/lib/marks";
 import { MAX_CARDS } from "@/lib/limits";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
-import { type Account, type Arrangement, BoardMenu, typing, useMod } from "./board-menu";
+import { type Account, type Arrangement, BoardMenu, hint, typing, useApple } from "./board-menu";
 import { CardMenu, type MenuItem } from "./card-menu";
 import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
@@ -569,7 +569,7 @@ export function Board({
     requestAnimationFrame(() => selectRange(el, map[s], map[e])); // the new HTML replaced the selection; pick another colour right away
   };
 
-  const mod = useMod() === "⌘" ? "⌘" : "Ctrl+"; // menu hints: ⌘G / Ctrl+G
+  const apple = useApple();
   const menuItems = (): MenuItem[] => {
     const one = picked.length === 1 ? picked[0] : null;
     const n = { n: picked.length };
@@ -577,18 +577,18 @@ export function Board({
     return [
       ...(one
         ? [
-            { label: t.edit, Icon: PencilSimple, hint: "↵", onSelect: () => setEditing({ id: one.id, field: "title" as const }) },
+            { label: t.edit, Icon: PencilSimple, hint: hint(["↵"], apple), onSelect: () => setEditing({ id: one.id, field: "title" as const }) },
             ...(one.title || one.body ? [{ label: t.read, Icon: SpeakerHigh, onSelect: () => speak(one.id, readable(one)) }] : []),
           ]
         : []),
-      ...(picked.length > 1 && !whole ? [{ label: t.group, Icon: BoundingBox, hint: `${mod}G`, onSelect: () => makeGroup(picked) }] : []),
+      ...(picked.length > 1 && !whole ? [{ label: t.group, Icon: BoundingBox, hint: hint(["⌘", "G"], apple), onSelect: () => makeGroup(picked) }] : []),
       ...(whole
-        ? [{ label: t.ungroup, Icon: SelectionSlash, hint: `⇧${mod}G`, onSelect: () => ungroup(whole) }]
+        ? [{ label: t.ungroup, Icon: SelectionSlash, hint: hint(["⇧", "⌘", "G"], apple), onSelect: () => ungroup(whole) }]
         : picked.some((c) => c.groupId)
           ? [{ label: t.leaveGroup, Icon: ArrowSquareOut, onSelect: () => leaveGroup(picked) }]
           : []),
-      { label: one ? t.duplicate : fill(t.duplicateMany, n), Icon: Copy, hint: `${mod}D`, onSelect: () => duplicate(picked) },
-      { label: one ? t.delete : fill(t.deleteMany, n), Icon: Trash, hint: "⌫", danger: true, onSelect: () => remove(picked) },
+      { label: one ? t.duplicate : fill(t.duplicateMany, n), Icon: Copy, hint: hint(["⌘", "D"], apple), onSelect: () => duplicate(picked) },
+      { label: one ? t.delete : fill(t.deleteMany, n), Icon: Trash, hint: hint(["⌫"], apple), danger: true, onSelect: () => remove(picked) },
     ];
   };
 

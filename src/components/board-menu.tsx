@@ -12,8 +12,13 @@ export type Arrangement = "tagColumns" | "tagRows" | "gridByTag" | "gridByTitle"
 export type Account = { name: string; email: string; image: string | null };
 type T = Dictionary["menu"];
 
-/** "⌘" on Apple devices, "Ctrl" elsewhere (both work everywhere). The server renders ⌘, the browser corrects it. */
-export const useMod = () => useSyncExternalStore(() => () => {}, () => (/Mac|iPhone|iPad|iPod/.test(navigator.userAgent) ? "⌘" : "Ctrl"), () => "⌘");
+/** Apple keyboard? Keys are written as symbols there (⌘ ⇧ ⌫ ↵), as words elsewhere. The server renders Apple, the browser corrects it. */
+export const useApple = () => useSyncExternalStore(() => () => {}, () => /Mac|iPhone|iPad|iPod/.test(navigator.userAgent), () => true);
+const PC: Record<string, string> = { "⌘": "Ctrl", "⇧": "Shift", "⌫": "Backspace", "↵": "Enter" };
+const rank = (k: string) => ["Ctrl", "Shift"].indexOf(k) + 1 || 3; // Ctrl+Shift+G, not Shift+Ctrl+G
+/** Keys as printed on this keyboard; `hint` joins them for a menu: ⇧⌘G or Ctrl+Shift+G. */
+export const keyLabels = (keys: string[], apple: boolean) => (apple ? keys : keys.map((k) => PC[k] ?? k).sort((a, b) => rank(a) - rank(b)));
+export const hint = (keys: string[], apple: boolean) => keyLabels(keys, apple).join(apple ? "" : "+");
 
 export const typing = (el: EventTarget | null) => el instanceof HTMLElement && (el.isContentEditable || el.matches("input, textarea, select"));
 
@@ -25,7 +30,7 @@ const ARRANGEMENTS: { id: Arrangement; Icon: typeof Columns }[] = [
 ];
 
 // Every shortcut of the board (board.tsx key handler, composer.tsx, focus.tsx). Keys are kbd chips; a "keys"
-// entry names a word from t.keys (Space, click...). "⌘" is shown as Ctrl off Apple devices (useMod).
+// entry names a word from t.keys (Space, click...). Off Apple devices ⌘ ⇧ ⌫ ↵ read Ctrl Shift Backspace Enter (keyLabels).
 type K = keyof T["keys"];
 const SHORTCUTS: [K, [(string | { w: K })[], K][]][] = [
   ["cards", [
@@ -77,11 +82,11 @@ export function BoardMenu({ account, boardId, locale, languages, t, onArrange }:
   const shortcuts = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState(account.name);
   const [saved, setSaved] = useState<"idle" | "saving" | "saved" | "failed">("idle");
-  const mod = useMod();
+  const apple = useApple();
   const themeLabels = { light: t.light, dark: t.dark, system: t.system };
   const item = "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900";
   const kbd = "min-w-6 rounded-md border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 text-center font-sans text-xs text-neutral-600 shadow-[0_1px_0_var(--color-neutral-200)]";
-  const hint = (k: string) => <kbd className={`ml-auto ${kbd}`}>{k}</kbd>;
+  const chip = (k: string) => <kbd className={`ml-auto ${kbd}`}>{k}</kbd>;
 
   const arrange = (a: Arrangement) => {
     menu.current?.hidePopover();
@@ -141,7 +146,7 @@ export function BoardMenu({ account, boardId, locale, languages, t, onArrange }:
           <button key={id} className={item} onClick={() => arrange(id)} aria-keyshortcuts={String(i + 1)}>
             <Icon className="size-4 shrink-0 text-neutral-500" aria-hidden />
             {t[id]}
-            {hint(String(i + 1))}
+            {chip(String(i + 1))}
           </button>
         ))}
 
@@ -155,12 +160,12 @@ export function BoardMenu({ account, boardId, locale, languages, t, onArrange }:
         <button className={item} onClick={openShortcuts} aria-keyshortcuts="?">
           <Keyboard className="size-4 shrink-0 text-neutral-500" aria-hidden />
           {t.shortcuts}
-          {hint("?")}
+          {chip("?")}
         </button>
         <button className={item} onClick={openSettings} aria-keyshortcuts=",">
           <GearSix className="size-4 shrink-0 text-neutral-500" aria-hidden />
           {t.settings}
-          {hint(",")}
+          {chip(",")}
         </button>
 
         <div className="my-2 h-px bg-neutral-200" />
@@ -205,9 +210,9 @@ export function BoardMenu({ account, boardId, locale, languages, t, onArrange }:
                   <div key={i} className="flex items-center justify-between gap-4 py-1.5">
                     <dt className="text-neutral-700">{t.keys[label]}</dt>
                     <dd className="flex shrink-0 gap-1">
-                      {keys.map((k, j) => (
+                      {keyLabels(keys.map((k) => (typeof k === "string" ? k : t.keys[k.w])), apple).map((k, j) => (
                         <kbd key={j} className={kbd}>
-                          {k === "⌘" ? mod : typeof k === "string" ? k : t.keys[k.w]}
+                          {k}
                         </kbd>
                       ))}
                     </dd>
