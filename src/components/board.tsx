@@ -23,7 +23,7 @@ import { fill } from "@/lib/format";
 import { type Color, COLORS, type Kind, type Mark, type MarkField, fromChars, normalize, paint, readField, selectRange, toHtml } from "@/lib/marks";
 import { MAX_CARDS } from "@/lib/limits";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
-import { type Account, type Arrangement, BoardMenu } from "./board-menu";
+import { type Account, type Arrangement, BoardMenu, typing } from "./board-menu";
 import { CardMenu, type MenuItem } from "./card-menu";
 import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
@@ -52,7 +52,6 @@ type Gesture = {
   boxes?: { id: string; x: number; y: number; w: number; h: number }[]; // marquee: card rects, measured once
 };
 const additive = (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => e.shiftKey || e.metaKey || e.ctrlKey;
-const typing = (el: EventTarget | null) => el instanceof HTMLElement && (el.isContentEditable || el.matches("input, textarea, select"));
 const HOLD_MS = 350;
 
 const CARD_WIDTH = 12 * GRID;
