@@ -2,7 +2,7 @@
 
 import { DotsThreeVertical, GearSix, Keyboard, Rows, SignOut, SquaresFour, SortAscending, Columns } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { signOutAction, updateNameAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
 import type { Locale } from "@/i18n/locales";
@@ -11,6 +11,9 @@ import { ThemePicker } from "./theme";
 export type Arrangement = "tagColumns" | "tagRows" | "gridByTag" | "gridByTitle";
 export type Account = { name: string; email: string; image: string | null };
 type T = Dictionary["menu"];
+
+/** "⌘" on Apple devices, "Ctrl" elsewhere (both work everywhere). The server renders ⌘, the browser corrects it. */
+export const useMod = () => useSyncExternalStore(() => () => {}, () => (/Mac|iPhone|iPad|iPod/.test(navigator.userAgent) ? "⌘" : "Ctrl"), () => "⌘");
 
 export const typing = (el: EventTarget | null) => el instanceof HTMLElement && (el.isContentEditable || el.matches("input, textarea, select"));
 
@@ -22,7 +25,7 @@ const ARRANGEMENTS: { id: Arrangement; Icon: typeof Columns }[] = [
 ];
 
 // Every shortcut of the board (board.tsx key handler, composer.tsx, focus.tsx). Keys are kbd chips; a "keys"
-// entry names a word from t.keys (Space, click...). ponytail: ⌘ only, like the right-click menu hints; Ctrl works too.
+// entry names a word from t.keys (Space, click...). "⌘" is shown as Ctrl off Apple devices (useMod).
 type K = keyof T["keys"];
 const SHORTCUTS: [K, [(string | { w: K })[], K][]][] = [
   ["cards", [
@@ -74,6 +77,7 @@ export function BoardMenu({ account, boardId, locale, languages, t, onArrange }:
   const shortcuts = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState(account.name);
   const [saved, setSaved] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const mod = useMod();
   const themeLabels = { light: t.light, dark: t.dark, system: t.system };
   const item = "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900";
   const kbd = "min-w-6 rounded-md border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 text-center font-sans text-xs text-neutral-600 shadow-[0_1px_0_var(--color-neutral-200)]";
@@ -203,7 +207,7 @@ export function BoardMenu({ account, boardId, locale, languages, t, onArrange }:
                     <dd className="flex shrink-0 gap-1">
                       {keys.map((k, j) => (
                         <kbd key={j} className={kbd}>
-                          {typeof k === "string" ? k : t.keys[k.w]}
+                          {k === "⌘" ? mod : typeof k === "string" ? k : t.keys[k.w]}
                         </kbd>
                       ))}
                     </dd>

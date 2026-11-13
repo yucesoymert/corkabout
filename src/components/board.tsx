@@ -23,7 +23,7 @@ import { fill } from "@/lib/format";
 import { type Color, COLORS, type Kind, type Mark, type MarkField, fromChars, normalize, paint, readField, selectRange, toHtml } from "@/lib/marks";
 import { MAX_CARDS } from "@/lib/limits";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
-import { type Account, type Arrangement, BoardMenu, typing } from "./board-menu";
+import { type Account, type Arrangement, BoardMenu, typing, useMod } from "./board-menu";
 import { CardMenu, type MenuItem } from "./card-menu";
 import { Composer, type Draft } from "./composer";
 import { Focus } from "./focus";
@@ -569,6 +569,7 @@ export function Board({
     requestAnimationFrame(() => selectRange(el, map[s], map[e])); // the new HTML replaced the selection; pick another colour right away
   };
 
+  const mod = useMod() === "⌘" ? "⌘" : "Ctrl+"; // menu hints: ⌘G / Ctrl+G
   const menuItems = (): MenuItem[] => {
     const one = picked.length === 1 ? picked[0] : null;
     const n = { n: picked.length };
@@ -580,13 +581,13 @@ export function Board({
             ...(one.title || one.body ? [{ label: t.read, Icon: SpeakerHigh, onSelect: () => speak(one.id, readable(one)) }] : []),
           ]
         : []),
-      ...(picked.length > 1 && !whole ? [{ label: t.group, Icon: BoundingBox, hint: "⌘G", onSelect: () => makeGroup(picked) }] : []),
+      ...(picked.length > 1 && !whole ? [{ label: t.group, Icon: BoundingBox, hint: `${mod}G`, onSelect: () => makeGroup(picked) }] : []),
       ...(whole
-        ? [{ label: t.ungroup, Icon: SelectionSlash, hint: "⇧⌘G", onSelect: () => ungroup(whole) }]
+        ? [{ label: t.ungroup, Icon: SelectionSlash, hint: `⇧${mod}G`, onSelect: () => ungroup(whole) }]
         : picked.some((c) => c.groupId)
           ? [{ label: t.leaveGroup, Icon: ArrowSquareOut, onSelect: () => leaveGroup(picked) }]
           : []),
-      { label: one ? t.duplicate : fill(t.duplicateMany, n), Icon: Copy, hint: "⌘D", onSelect: () => duplicate(picked) },
+      { label: one ? t.duplicate : fill(t.duplicateMany, n), Icon: Copy, hint: `${mod}D`, onSelect: () => duplicate(picked) },
       { label: one ? t.delete : fill(t.deleteMany, n), Icon: Trash, hint: "⌫", danger: true, onSelect: () => remove(picked) },
     ];
   };
