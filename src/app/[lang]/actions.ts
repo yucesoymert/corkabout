@@ -139,10 +139,12 @@ export async function deleteCardsAction(boardId: string, list: string[]) {
 // ===== Groups: a named frame around some cards (src/db/schema.ts cardGroups) =====
 const groupTitle = z.string().trim().max(120);
 
-/** Also "undo" after ungrouping: the same id and title come back. Cards in another group move to this one. */
-export async function createGroupAction(boardId: string, group: { id: string; title: string }, cardIds: string[]) {
+const groupLook = { color: z.enum(COLORS).nullable(), fill: z.boolean(), fillOpacity: z.number().int().min(10).max(100) };
+
+/** Also "undo" after ungrouping: the same id, title and colour come back. Cards in another group move to this one. */
+export async function createGroupAction(boardId: string, group: { id: string; title: string; color: string | null; fill: boolean; fillOpacity: number }, cardIds: string[]) {
   const board = await requireBoard(boardId);
-  const parsed = z.object({ id: z.uuid(), title: groupTitle }).safeParse(group);
+  const parsed = z.object({ id: z.uuid(), title: groupTitle, ...groupLook }).safeParse(group);
   const members = ids.safeParse(cardIds);
   if (!parsed.success || !members.success) return false;
   await db.transaction(async (tx) => {
@@ -152,11 +154,12 @@ export async function createGroupAction(boardId: string, group: { id: string; ti
   return true;
 }
 
-export async function renameGroupAction(boardId: string, id: string, title: string) {
+/** Title, colour or fill of a group. */
+export async function updateGroupAction(boardId: string, id: string, patch: { title?: string; color?: string | null; fill?: boolean; fillOpacity?: number }) {
   const board = await requireBoard(boardId);
-  const parsed = groupTitle.safeParse(title);
+  const parsed = z.object({ title: groupTitle, ...groupLook }).partial().safeParse(patch);
   if (!parsed.success || !z.uuid().safeParse(id).success) return false;
-  await db.update(cardGroups).set({ title: parsed.data }).where(and(eq(cardGroups.id, id), eq(cardGroups.boardId, board.id)));
+  await db.update(cardGroups).set(parsed.data).where(and(eq(cardGroups.id, id), eq(cardGroups.boardId, board.id)));
   return true;
 }
 

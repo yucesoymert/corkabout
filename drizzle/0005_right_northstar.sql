@@ -1,0 +1,1 @@
+ALTER TABLE "card_group" ADD COLUMN "fill_opacity" integer DEFAULT 50 NOT NULL;
