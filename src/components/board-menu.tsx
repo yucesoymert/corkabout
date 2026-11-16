@@ -1,6 +1,6 @@
 "use client";
 
-import { DotsThreeVertical, GearSix, Keyboard, Rows, SignOut, SquaresFour, SortAscending, Columns } from "@phosphor-icons/react";
+import { ArrowRight, DotsThreeVertical, GearSix, Keyboard, Rows, SignOut, SquaresFour, SortAscending, Columns } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { signOutAction, updateNameAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
@@ -300,9 +300,12 @@ export function BoardMenu({
                 settings.current?.close();
                 onUpgrade();
               }}
-              className="rounded-md bg-white px-3 py-1.5 font-medium shadow-sm hover:bg-neutral-50"
+              // hover: the arrow lifts and turns to ↗, and one glint sweeps across (keyframes "shine" in globals.css)
+              className="always-light group relative flex items-center gap-1.5 overflow-hidden rounded-md bg-[#FECF39] px-3 py-1.5 font-semibold text-neutral-900 shadow-sm"
             >
               {t.upgrade}
+              <ArrowRight weight="bold" className="size-3.5 transition-transform duration-300 ease-[cubic-bezier(.3,1.4,.5,1)] group-hover:-translate-y-0.5 group-hover:-rotate-45 motion-reduce:transition-none" aria-hidden />
+              <span aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(45deg,transparent_36%,rgba(255,255,255,.55)_50%,transparent_64%)] bg-size-[250%_100%] bg-position-[150%_0] bg-no-repeat group-hover:animate-[shine_2.2s_ease-out] motion-reduce:hidden" />
             </button>
           ) : (
             <span className="h-8" />

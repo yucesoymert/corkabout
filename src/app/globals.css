@@ -59,6 +59,22 @@
   --color-neutral-900: #f1eee9;
   --color-neutral-950: #faf8f4;
 }
+/* Pieces that look the same in both themes (the paywall poster, the yellow "Go Pro" button): the light scale back. */
+.dark .always-light {
+  color-scheme: light;
+  --color-white: #fff;
+  --color-neutral-50: oklch(98.5% 0 0);
+  --color-neutral-100: oklch(97% 0 0);
+  --color-neutral-200: oklch(92.2% 0 0);
+  --color-neutral-300: oklch(87% 0 0);
+  --color-neutral-400: oklch(70.8% 0 0);
+  --color-neutral-500: #6d6d6d;
+  --color-neutral-600: oklch(43.9% 0 0);
+  --color-neutral-700: oklch(37.1% 0 0);
+  --color-neutral-800: oklch(26.9% 0 0);
+  --color-neutral-900: oklch(20.5% 0 0);
+  --color-neutral-950: oklch(14.5% 0 0);
+}
 
 /* Coloured parts of card text (src/lib/marks.ts). Text colours are dark enough for the white card (yellow-700 and
  * friends, ≥4.5:1), light ones on the dark card; highlights are pastel in light mode, see-through in dark mode. */
@@ -115,5 +131,23 @@
   from {
     opacity: 0;
     translate: 0 4px;
+  }
+}
+
+/* the paywall's backdrop fades in (::backdrop is out of Motion's reach) */
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* a glint across the "save 25%" badge, the band leaning at 135° (top-left to bottom-right): a 1.6 s sweep every 6 s */
+@keyframes shine {
+  0% {
+    background-position: 150% 0;
+  }
+  27%,
+  100% {
+    background-position: -50% 0;
   }
 }

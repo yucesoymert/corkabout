@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle, X } from "@phosphor-icons/react";
+import { MotionConfig, motion, type Variants } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { Dictionary } from "@/i18n/tr";
 import { fill } from "@/lib/format";
@@ -17,27 +18,66 @@ const PRICES = {
   USD: { sign: "$", free: "0", month: "3.99", year: "35" },
 };
 
+// Opening choreography (Motion springs): the dialog rises, the plans follow one after the other with a little
+// tilt, their perks tick in, the PRO wordmark pops and the mascot jumps in, then stays put.
+// Children pick up "hidden" → "show" from the dialog. Reduced motion: opacity only.
+const fade = { opacity: { duration: 0.2, ease: "easeOut" } } as const; // springs move things; a bouncy spring on opacity flickers
+const spring = { type: "spring", stiffness: 320, damping: 24, ...fade } as const;
+const dialogIn: Variants = { hidden: { opacity: 0, y: 40, scale: 0.94 }, show: { opacity: 1, y: 0, scale: 1, transition: spring } };
+const plans: Variants = { show: { transition: { staggerChildren: 0.09, delayChildren: 0.1 } } };
+const cardIn: Variants = {
+  hidden: (tilt: number) => ({ opacity: 0, y: 28, rotate: tilt }),
+  show: { opacity: 1, y: 0, rotate: 0, transition: { type: "spring", stiffness: 260, damping: 18, ...fade } },
+};
+const perks: Variants = { show: { transition: { staggerChildren: 0.06, delayChildren: 0.22 } } };
+const perkIn: Variants = { hidden: { opacity: 0, x: -12 }, show: { opacity: 1, x: 0, transition: spring } };
+const pop: Variants = {
+  hidden: { opacity: 0, scale: 0.8, rotate: -4 },
+  show: { opacity: 1, scale: 1, rotate: 0, transition: { type: "spring", stiffness: 400, damping: 24, delay: 0.25, opacity: { duration: 0.2, delay: 0.25 } } },
+};
+const mascotIn: Variants = {
+  hidden: { opacity: 0, scale: 0.7, rotate: -10, y: 24 },
+  show: { opacity: 1, scale: 1, rotate: -3, y: 0, transition: { type: "spring", stiffness: 260, damping: 22, delay: 0.38, opacity: { duration: 0.2, delay: 0.38 } } },
+};
+
 // The photo limit's plans page: Free (current) next to Pro. Payments aren't open yet, so Pro's button stays locked;
 // when they are, it becomes a link to the checkout (monthly or yearly variant) with the user id attached.
-// Always light (cream + Pro yellow), like a printed poster, in both themes. It scrolls on short screens without a
-// scrollbar: a native one runs down the rounded edge and looks cut off.
+// Always light (cream + Pro yellow), like a printed poster, in both themes (.always-light in globals.css).
+// It scrolls on short screens without a scrollbar: a native one runs down the rounded edge and looks cut off.
 export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [yearly, setYearly] = useState(false);
   useEffect(() => dialog.current?.showModal(), []);
+  // Closing plays the opening backwards first (plain WAAPI, the ::backdrop too), since
+  // the dialog unmounts the moment it closes. Escape goes through here too (cancel → close).
+  const close = () => {
+    const d = dialog.current;
+    if (!d || matchMedia("(prefers-reduced-motion: reduce)").matches) return d?.close();
+    const out = { duration: 180, easing: "ease-in", fill: "forwards" } as const;
+    d.animate({ opacity: [1, 0], transform: ["none", "translateY(12px) scale(.97)"] }, out);
+    d.animate({ opacity: [1, 0] }, { ...out, pseudoElement: "::backdrop" }).finished.then(() => d.close());
+  };
   const n = (x: number) => x.toLocaleString(document.documentElement.lang);
   const per = yearly ? t.perYear : t.perMonth;
   const [usd, setUsd] = useState(() => document.documentElement.lang !== "tr"); // English UI opens in dollars
   const price = PRICES[usd ? "USD" : "TRY"];
 
   return (
-    <dialog
+    <MotionConfig reducedMotion="user">
+    <motion.dialog
       ref={dialog}
+      variants={dialogIn}
+      initial="hidden"
+      animate="show"
       onClose={onClose}
+      onCancel={(e) => {
+        e.preventDefault();
+        close();
+      }}
       aria-labelledby="paywall-title"
       aria-describedby="paywall-body"
       style={{ backgroundImage: NOISE }}
-      className="m-auto max-h-[calc(100dvh-1.5rem)] w-[min(56rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-[28px] [scrollbar-width:none] bg-[#f7efe3] p-4 text-neutral-900 shadow-2xl backdrop:bg-black/50 sm:p-6"
+      className="always-light m-auto max-h-[calc(100dvh-1.5rem)] w-[min(56rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-[28px] [scrollbar-width:none] bg-[#f7efe3] p-4 text-neutral-900 shadow-2xl backdrop:bg-black/50 backdrop:animate-[backdrop-in_.3s_ease-out] motion-reduce:backdrop:animate-none sm:p-6"
     >
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 text-lg font-bold tracking-tight">
@@ -45,7 +85,7 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
           <img src="/icon.svg" alt="" className="size-8" />
           corkabout
         </span>
-        <button onClick={() => dialog.current?.close()} aria-label={t.close} title={t.close} className="grid size-9 place-items-center rounded-full hover:bg-black/5">
+        <button onClick={close} aria-label={t.close} title={t.close} className="grid size-9 place-items-center rounded-full hover:bg-black/5">
           <X className="size-5" aria-hidden />
         </button>
       </div>
@@ -60,7 +100,7 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
         {/* 1fr | toggle | 1fr: the period toggle sits dead centre, the currency switch at the right edge */}
         <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <span />
-          <Toggle label={t.yearly} on={yearly} set={setYearly} options={[t.monthly, <>{t.yearly}<span className="rounded-full bg-[#FECF39] px-2 py-0.5 text-xs font-semibold text-neutral-900">{t.yearlySave}</span></>]} />
+          <Toggle label={t.yearly} on={yearly} set={setYearly} options={[t.monthly, <>{t.yearly}<span className="relative overflow-hidden rounded-full bg-[#FECF39] px-2 py-0.5 text-xs font-semibold text-neutral-900">{t.yearlySave}<span aria-hidden className="absolute inset-0 animate-[shine_6s_ease-in-out_infinite] bg-[linear-gradient(45deg,transparent_36%,rgba(255,255,255,.55)_50%,transparent_64%)] bg-size-[250%_100%] bg-no-repeat motion-reduce:hidden" /></span></>]} />
           {/* phones: no room beside the period toggle, so it moves up next to the close button */}
           <div className="justify-self-end max-sm:absolute max-sm:top-3.5 max-sm:right-14">
             <Currency label={t.currency} usd={usd} set={setUsd} />
@@ -69,9 +109,11 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
       </div>
 
       {/* subgrid: both cards share the rows, so titles, prices, lists and buttons line up across them */}
-      <div className="mt-6 grid grid-rows-[auto_auto_1fr_auto] gap-x-3 md:grid-cols-[2fr_3fr]">
+      <motion.div variants={plans} className="mt-6 grid grid-rows-[auto_auto_1fr_auto] gap-x-3 md:grid-cols-[2fr_3fr]">
         {/* same cream and grain as the dialog; a warm hairline and a lifted shadow set it apart */}
-        <section
+        <motion.section
+          variants={cardIn}
+          custom={-3}
           aria-label={t.freeName}
           style={{ backgroundImage: NOISE }}
           className="row-span-4 grid grid-rows-subgrid rounded-[22px] bg-[#f7efe3] p-5 shadow-[0_0_0_1px_rgba(120,85,40,.14),0_1px_0_rgba(255,255,255,.8)_inset,0_2px_4px_rgba(80,50,20,.06),0_14px_32px_-14px_rgba(80,50,20,.4)] sm:p-6"
@@ -82,15 +124,20 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
           <button disabled className="h-12 w-full rounded-xl border-2 border-neutral-900 font-semibold">
             {t.currentPlan}
           </button>
-        </section>
+        </motion.section>
 
         {/* phones and small tablets: Pro stacks first so the offer is on screen without scrolling */}
-        <section aria-label="Pro" className="relative row-span-4 grid grid-rows-subgrid overflow-hidden rounded-[22px] bg-[#FECF39] p-5 sm:p-6 shadow-[0_1px_0_rgba(255,255,255,.6)_inset,0_8px_24px_-12px_rgba(80,50,20,.35)] max-md:order-first max-md:mb-3">
-          {/* eslint-disable-next-line @next/next/no-img-element -- static artwork */}
-          <img src="/pro-mascot.webp" alt="" width={600} height={548} className="pointer-events-none absolute top-3 right-2 w-[38%] max-w-56 -rotate-3 md:top-12 md:w-[40%] md:max-w-72 lg:w-[50%]" />
+        <motion.section variants={cardIn} custom={3} aria-label="Pro" className="relative row-span-4 grid grid-rows-subgrid overflow-hidden rounded-[22px] bg-[#FECF39] p-5 sm:p-6 shadow-[0_1px_0_rgba(255,255,255,.6)_inset,0_8px_24px_-12px_rgba(80,50,20,.35)] max-md:order-first max-md:mb-3">
+          <motion.img
+            variants={mascotIn}
+            src="/pro-mascot.webp"
+            alt=""
+            width={600}
+            height={548}
+            className="pointer-events-none absolute top-3 right-2 w-[38%] max-w-56 md:top-12 md:w-[40%] md:max-w-72 lg:w-[50%]"
+          />
           <h3 className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element -- static artwork */}
-            <img src="/pro-wordmark.webp" alt="Pro" width={560} height={190} className="h-12 w-auto sm:h-16" />
+            <motion.img variants={pop} src="/pro-wordmark.webp" alt="Pro" width={560} height={190} className="h-12 w-auto origin-left sm:h-16" />
           </h3>
           <Price value={price.sign + (yearly ? price.year : price.month)} per={per} />
           <Perks list={fill(t.proPerks, { n: n(MAX_PHOTOS_PRO) })} />
@@ -99,13 +146,14 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
             {t.goPro}
             <span className="rounded-full bg-[#FECF39] px-2.5 py-0.5 text-xs font-semibold text-neutral-900">{t.soon}</span>
           </button>
-        </section>
-      </div>
+        </motion.section>
+      </motion.div>
 
       <p id="paywall-soon" className="pt-4 text-center text-sm text-neutral-900/45">
         {t.paywallSoon}
       </p>
-    </dialog>
+    </motion.dialog>
+    </MotionConfig>
   );
 }
 
@@ -153,14 +201,14 @@ function Odometer({ value }: { value: string }) {
 
 function Perks({ list }: { list: string }) {
   return (
-    <ul className="relative mt-5 mb-6 flex flex-col gap-2.5 font-medium">
+    <motion.ul variants={perks} className="relative mt-5 mb-6 flex flex-col gap-2.5 font-medium">
       {list.split("|").map((perk) => (
-        <li key={perk} className="flex items-center gap-2.5">
+        <motion.li variants={perkIn} key={perk} className="flex items-center gap-2.5">
           <CheckCircle weight="fill" className="size-6 shrink-0" aria-hidden />
           {perk}
-        </li>
+        </motion.li>
       ))}
-    </ul>
+    </motion.ul>
   );
 }
 

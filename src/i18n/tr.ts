@@ -173,7 +173,7 @@ export const tr = {
     plan: "Plan",
     planFree: "Ücretsiz · {used}/{limit} fotoğraf",
     planPro: "Pro · {used}/{limit} fotoğraf",
-    planUnlimited: "Sınırsız · {used} fotoğraf",
+    planUnlimited: "Sınırsız",
     upgrade: "Pro'ya geç",
     settings: "Ayarlar",
     name: "Görünen ad",
