@@ -117,3 +117,21 @@
     translate: 0 4px;
   }
 }
+
+/* the paywall's backdrop fades in (::backdrop is out of Motion's reach) */
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* a glint across the "save 25%" badge, the band leaning at 135° (top-left to bottom-right): a 1.6 s sweep every 6 s */
+@keyframes shine {
+  0% {
+    background-position: 150% 0;
+  }
+  27%,
+  100% {
+    background-position: -50% 0;
+  }
+}
