@@ -70,7 +70,12 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
 
       {/* subgrid: both cards share the rows, so titles, prices, lists and buttons line up across them */}
       <div className="mt-6 grid grid-rows-[auto_auto_1fr_auto] gap-x-3 md:grid-cols-[2fr_3fr]">
-        <section aria-label={t.freeName} className="row-span-4 grid grid-rows-subgrid rounded-[22px] bg-[#ead7b9] p-5 sm:p-6 shadow-[0_1px_0_rgba(255,255,255,.6)_inset,0_8px_24px_-12px_rgba(80,50,20,.35)]">
+        {/* same cream and grain as the dialog; a warm hairline and a lifted shadow set it apart */}
+        <section
+          aria-label={t.freeName}
+          style={{ backgroundImage: NOISE }}
+          className="row-span-4 grid grid-rows-subgrid rounded-[22px] bg-[#f7efe3] p-5 shadow-[0_0_0_1px_rgba(120,85,40,.14),0_1px_0_rgba(255,255,255,.8)_inset,0_2px_4px_rgba(80,50,20,.06),0_14px_32px_-14px_rgba(80,50,20,.4)] sm:p-6"
+        >
           <h3 className="self-end text-3xl font-extrabold sm:text-4xl tracking-tight">{t.freeName}</h3>
           <Price value={price.sign + price.free} per={per} />
           <Perks list={fill(t.freePerks, { n: MAX_PHOTOS_FREE, boards: n(MAX_BOARDS), cards: n(MAX_CARDS) })} />
@@ -97,7 +102,7 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
         </section>
       </div>
 
-      <p id="paywall-soon" className="pt-4 text-center text-sm text-neutral-700">
+      <p id="paywall-soon" className="pt-4 text-center text-sm text-neutral-900/45">
         {t.paywallSoon}
       </p>
     </dialog>
@@ -187,6 +192,7 @@ function Currency({ label, usd, set }: { label: string; usd: boolean; set: (usd:
     <div role="group" aria-label={label} className="relative grid grid-cols-2 gap-x-1 rounded-2xl bg-black/[.07] p-1">
       <span
         aria-hidden
+        style={{ backgroundImage: NOISE }}
         className={`absolute inset-y-1 left-1 w-[calc((100%-0.75rem)/2)] rounded-xl bg-[#f7efe3] shadow-sm transition-transform duration-300 ease-[cubic-bezier(.3,1.3,.5,1)] motion-reduce:transition-none ${usd ? "translate-x-[calc(100%+0.25rem)]" : ""}`}
       />
       {(["₺", "$"] as const).map((sign, i) => (
