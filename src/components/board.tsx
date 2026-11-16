@@ -280,11 +280,17 @@ export function Board({
           toast.success(t.uploaded, { id });
           add(d, at, blob.url);
         },
-        (e: unknown) => {
-          toast.dismiss(id);
-          if (e instanceof Error && e.message.includes("limit")) setPaywall(true);
-          else toast.error(t.uploadFailed);
-        },
+        () =>
+          // the upload error never says why (see GET in src/app/api/photo/route.ts), so ask whether the limit is full:
+          // Pro can run out while the board is open, and the board's own count only knows the page-load state
+          fetch("/api/photo")
+            .then((r) => r.json() as Promise<{ full: boolean }>)
+            .catch(() => ({ full: false }))
+            .then(({ full }) => {
+              toast.dismiss(id);
+              if (full) setPaywall(true);
+              else toast.error(t.uploadFailed);
+            }),
       );
   };
   /** Files dropped on the canvas: photo cards where they were dropped, fanned out a little; only as many as the limit leaves. */
