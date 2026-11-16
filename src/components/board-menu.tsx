@@ -1,13 +1,12 @@
 "use client";
 
-import { ArrowRight, DotsThreeVertical, GearSix, Keyboard, Rows, SignOut, SquaresFour, SortAscending, Columns } from "@phosphor-icons/react";
+import { DotsThreeVertical, GearSix, Keyboard, Rows, SignOut, SquaresFour, SortAscending, Columns } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { signOutAction, updateNameAction } from "@/app/[lang]/actions";
+import { signOutAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
 import type { Locale } from "@/i18n/locales";
-import { fill } from "@/lib/format";
-import { MAX_PHOTOS_PRO } from "@/lib/limits";
 import type { Photos } from "./composer";
+import { Settings } from "./settings";
 import { ThemePicker } from "./theme";
 
 export type Arrangement = "tagColumns" | "tagRows" | "gridByTag" | "gridByTitle";
@@ -101,7 +100,6 @@ export function BoardMenu({
   const settings = useRef<HTMLDialogElement>(null);
   const shortcuts = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState(account.name);
-  const [saved, setSaved] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const apple = useApple();
   const themeLabels = { light: t.light, dark: t.dark, system: t.system };
   const item = "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900";
@@ -119,7 +117,6 @@ export function BoardMenu({
   };
   const openSettings = () => {
     menu.current?.hidePopover();
-    setSaved("idle");
     settings.current?.showModal();
   };
   // M opens the menu, 1-4 pick a layout while it is open, ? and , open their dialogs. Not while typing or in a dialog.
@@ -138,15 +135,6 @@ export function BoardMenu({
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   });
-
-  const saveName = async (fd: FormData) => {
-    const next = String(fd.get("name") ?? "").trim();
-    if (!next || next === name) return;
-    setSaved("saving");
-    const ok = await updateNameAction(next);
-    if (ok) setName(next);
-    setSaved(ok ? "saved" : "failed");
-  };
 
   return (
     <>
@@ -249,75 +237,17 @@ export function BoardMenu({
         </div>
       </dialog>
 
-      <dialog ref={settings} aria-labelledby="settings-title" className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-2xl bg-white p-6 text-neutral-900 backdrop:bg-black/40">
-        <h2 id="settings-title" className="font-semibold">
-          {t.settings}
-        </h2>
-
-        <form action={saveName} className="mt-5">
-          <label htmlFor="settings-name" className="text-sm font-medium">
-            {t.name}
-          </label>
-          <div className="mt-1.5 flex gap-2">
-            <input id="settings-name" name="name" defaultValue={name} required maxLength={80} className="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900" />
-            <button disabled={saved === "saving"} className="rounded-full bg-neutral-900 px-4 text-sm font-semibold text-white hover:bg-neutral-700 disabled:opacity-60">
-              {t.save}
-            </button>
-          </div>
-          <p className="mt-1 h-4 text-xs text-neutral-500" aria-live="polite">
-            {saved === "saved" ? t.saved : saved === "failed" ? t.saveFailed : ""}
-          </p>
-        </form>
-
-        <p className="mt-4 text-sm font-medium">{t.language}</p>
-        <nav className="mt-1.5 grid grid-cols-2 gap-1 rounded-lg bg-neutral-100 p-1 text-sm">
-          {(Object.keys(languages) as Locale[]).map((l) => (
-            // <a>, not <Link>: another language is another root layout. A full load keeps React from re-creating the theme <script> in <head>.
-            <a
-              key={l}
-              href={`/${l}/b/${boardId}`}
-              aria-current={l === locale ? "true" : undefined}
-              className="rounded-md px-2 py-1.5 text-center text-neutral-600 hover:text-neutral-900 aria-[current=true]:bg-white aria-[current=true]:font-medium aria-[current=true]:text-neutral-900 aria-[current=true]:shadow-sm"
-            >
-              {languages[l]}
-            </a>
-          ))}
-        </nav>
-
-        <p className="mt-5 text-sm font-medium">{t.theme}</p>
-        <div className="mt-1.5">
-          <ThemePicker labels={themeLabels} />
-        </div>
-
-        <p className="mt-5 text-sm font-medium">{t.plan}</p>
-        <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-neutral-100 py-1 pr-1 pl-3 text-sm">
-          <span className="text-neutral-700 tabular-nums">
-            {fill(photos.limit === null ? t.planUnlimited : photos.limit === MAX_PHOTOS_PRO ? t.planPro : t.planFree, { used: photos.used, limit: photos.limit ?? "" })}
-          </span>
-          {photos.limit !== null && photos.limit < MAX_PHOTOS_PRO ? (
-            <button
-              onClick={() => {
-                settings.current?.close();
-                onUpgrade();
-              }}
-              // hover: the arrow lifts and turns to ↗, and one glint sweeps across (keyframes "shine" in globals.css)
-              className="always-light group relative flex items-center gap-1.5 overflow-hidden rounded-md bg-[#FECF39] px-3 py-1.5 font-semibold text-neutral-900 shadow-sm"
-            >
-              {t.upgrade}
-              <ArrowRight weight="bold" className="size-3.5 transition-transform duration-300 ease-[cubic-bezier(.3,1.4,.5,1)] group-hover:-translate-y-0.5 group-hover:-rotate-45 motion-reduce:transition-none" aria-hidden />
-              <span aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(45deg,transparent_36%,rgba(255,255,255,.55)_50%,transparent_64%)] bg-size-[250%_100%] bg-position-[150%_0] bg-no-repeat group-hover:animate-[shine_2.2s_ease-out] motion-reduce:hidden" />
-            </button>
-          ) : (
-            <span className="h-8" />
-          )}
-        </div>
-
-        <div className="mt-6 flex justify-end">
-          <button onClick={() => settings.current?.close()} className="rounded-full px-4 py-2 text-sm font-medium hover:bg-neutral-100">
-            {t.close}
-          </button>
-        </div>
-      </dialog>
+      <Settings
+        ref={settings}
+        name={account.name}
+        path={`/b/${boardId}`}
+        locale={locale}
+        languages={languages}
+        photos={photos}
+        t={t}
+        onUpgrade={onUpgrade}
+        onRenamed={setName}
+      />
     </>
   );
 }

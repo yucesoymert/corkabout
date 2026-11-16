@@ -8,11 +8,12 @@ import { DeleteBoard } from "@/components/delete-board";
 import { EditBoard } from "@/components/edit-board";
 import { PendingButton } from "@/components/pending-button";
 import { PinnedTitle } from "@/components/pinned-title";
+import { SettingsButton } from "@/components/settings";
 import { ThemeToggle } from "@/components/theme";
 import { db } from "@/db";
 import { boards, cards } from "@/db/schema";
 import { getDictionary, getLocale, locales } from "@/i18n";
-import { requireUser } from "@/lib/auth-guard";
+import { photoQuota, requireUser } from "@/lib/auth-guard";
 import { boardLook } from "@/lib/board-look";
 import { fill } from "@/lib/format";
 import { MAX_BOARDS } from "@/lib/limits";
@@ -35,6 +36,9 @@ export default async function HomePage() {
           ))}
         </nav>
         <ThemeToggle label={t.home.theme} />
+        <Suspense fallback={<span className="size-8" />}>
+          <AccountSettings />
+        </Suspense>
         <form action={signOutAction}>
           <PendingButton
             aria-label={t.home.signOut}
@@ -63,6 +67,13 @@ export default async function HomePage() {
       </main>
     </>
   );
+}
+
+// The gear needs the account (name, photo quota), so it streams in like the board list.
+async function AccountSettings() {
+  const [user, t, locale] = [await requireUser(), await getDictionary(), await getLocale()];
+  const quota = await photoQuota(user.id);
+  return <SettingsButton name={user.name ?? ""} path="" locale={locale} languages={t.language} photos={quota} t={t.menu} board={t.board} />;
 }
 
 async function Boards() {

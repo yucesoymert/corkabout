@@ -151,3 +151,10 @@
     background-position: -50% 0;
   }
 }
+
+/* Settings: the photo count slides out from under the plan box */
+@keyframes tab-out {
+  from {
+    translate: 0 -100%;
+  }
+}
