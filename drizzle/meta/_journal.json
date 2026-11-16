@@ -43,6 +43,13 @@
       "when": 1794553294895,
       "tag": "0005_right_northstar",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794755054869,
+      "tag": "0006_dapper_ronan",
+      "breakpoints": true
     }
   ]
 }
