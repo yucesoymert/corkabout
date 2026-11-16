@@ -174,7 +174,7 @@ export const en: Dictionary = {
     plan: "Plan",
     planFree: "Free · {used}/{limit} photos",
     planPro: "Pro · {used}/{limit} photos",
-    planUnlimited: "Unlimited · {used} photos",
+    planUnlimited: "Unlimited",
     upgrade: "Go Pro",
     settings: "Settings",
     name: "Display name",

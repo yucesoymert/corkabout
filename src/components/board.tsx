@@ -608,6 +608,19 @@ export function Board({
   useEffect(() => {
     undoRef.current = undoEntry;
   });
+  // ⌘V with an image on the clipboard (a screenshot, an image copied in the browser, a file copied in Finder):
+  // photo cards in the middle of the screen. Text pastes into fields are left alone.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (typing(e.target) || document.querySelector("dialog[open]")) return;
+      const files = [...(e.clipboardData?.files ?? [])];
+      if (!files.length) return;
+      e.preventDefault();
+      dropPhotos(files, innerWidth / 2, innerHeight / 2);
+    };
+    addEventListener("paste", onPaste);
+    return () => removeEventListener("paste", onPaste);
+  });
   const zoomBy = (f: number) => jump(zoomAt(v, innerWidth / 2, innerHeight / 2, v.zoom * f));
   const rename = (value: string) => {
     const next = value.trim();
