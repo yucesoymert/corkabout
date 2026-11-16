@@ -1,1 +1,1 @@
-{ "regions": ["fra1"] }
+{ "regions": ["fra1"], "crons": [{ "path": "/api/cron/photos", "schedule": "0 4 * * *" }] }

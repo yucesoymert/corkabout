@@ -54,6 +54,10 @@ export function Focus({ cards, t, untitled, onClose }: { cards: CardData[]; t: D
       {card ? (
         <>
           <article ref={article} tabIndex={-1} aria-live="polite" className="max-h-[70dvh] w-full max-w-[720px] overflow-y-auto rounded-lg bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,.12)] outline-none sm:p-12">
+            {card.image && (
+              // eslint-disable-next-line @next/next/no-img-element -- the same Blob URL the board already loaded
+              <img src={card.image} alt={card.title || t.photo} className="mb-5 max-h-[45dvh] w-full rounded-md object-contain" />
+            )}
             {card.tag && <p className="mb-3.5 text-xs tracking-[.08em] text-neutral-500 uppercase">{card.tag}</p>}
             <h2 className="mb-5 font-serif text-2xl leading-tight sm:mb-6 sm:text-[28px] font-bold whitespace-pre-wrap text-ink" dangerouslySetInnerHTML={{ __html: card.title ? toHtml(card.title, card.marks, "title") : untitled }} />
             {revealed ? (

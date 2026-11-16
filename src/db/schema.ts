@@ -8,6 +8,7 @@ export const users = pgTable("user", {
   email: text("email").unique(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
+  proUntil: timestamp("pro_until", { mode: "date" }), // Pro (more photos) until then; null = free. Set by the payment webhook (not built yet)
 });
 
 export const accounts = pgTable(
@@ -75,6 +76,7 @@ export const cards = pgTable(
     title: text("title").notNull().default(""),
     body: text("body").notNull().default(""),
     tag: text("tag"), // the filter chip in the board's top bar
+    image: text("image"), // a photo card: public Vercel Blob URL (src/app/api/photo/route.ts); null = text only
     marks: jsonb("marks").$type<Mark[]>().notNull().default([]), // coloured parts of title/body, see src/lib/marks.ts
     groupId: uuid("group_id").references(() => cardGroups.id, { onDelete: "set null" }), // ungrouping deletes the group row
     x: integer("x").notNull(),

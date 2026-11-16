@@ -109,3 +109,11 @@
   background-size: var(--dot) var(--dot);
   background-position: var(--dot-x) var(--dot-y);
 }
+
+/* the paywall's "/ month" ↔ "/ year" swap */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}

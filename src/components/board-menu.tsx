@@ -5,6 +5,9 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { signOutAction, updateNameAction } from "@/app/[lang]/actions";
 import type { Dictionary } from "@/i18n/tr";
 import type { Locale } from "@/i18n/locales";
+import { fill } from "@/lib/format";
+import { MAX_PHOTOS_PRO } from "@/lib/limits";
+import type { Photos } from "./composer";
 import { ThemePicker } from "./theme";
 
 export type Arrangement = "tagColumns" | "tagRows" | "gridByTag" | "gridByTitle";
@@ -75,7 +78,25 @@ const SHORTCUTS: [K, [(string | { w: K })[], K][]][] = [
 ];
 
 // Top-right "⋯" of a board. Native popover (light dismiss + Esc for free) and a native <dialog> for settings.
-export function BoardMenu({ account, boardId, locale, languages, t, onArrange }: { account: Account; boardId: string; locale: Locale; languages: Record<Locale, string>; t: T; onArrange: (a: Arrangement) => void }) {
+export function BoardMenu({
+  account,
+  boardId,
+  locale,
+  languages,
+  photos,
+  t,
+  onArrange,
+  onUpgrade,
+}: {
+  account: Account;
+  boardId: string;
+  locale: Locale;
+  languages: Record<Locale, string>;
+  photos: Photos;
+  t: T;
+  onArrange: (a: Arrangement) => void;
+  onUpgrade: () => void;
+}) {
   const menu = useRef<HTMLDivElement>(null);
   const settings = useRef<HTMLDialogElement>(null);
   const shortcuts = useRef<HTMLDialogElement>(null);
@@ -266,6 +287,26 @@ export function BoardMenu({ account, boardId, locale, languages, t, onArrange }:
         <p className="mt-5 text-sm font-medium">{t.theme}</p>
         <div className="mt-1.5">
           <ThemePicker labels={themeLabels} />
+        </div>
+
+        <p className="mt-5 text-sm font-medium">{t.plan}</p>
+        <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-neutral-100 py-1 pr-1 pl-3 text-sm">
+          <span className="text-neutral-700 tabular-nums">
+            {fill(photos.limit === null ? t.planUnlimited : photos.limit === MAX_PHOTOS_PRO ? t.planPro : t.planFree, { used: photos.used, limit: photos.limit ?? "" })}
+          </span>
+          {photos.limit !== null && photos.limit < MAX_PHOTOS_PRO ? (
+            <button
+              onClick={() => {
+                settings.current?.close();
+                onUpgrade();
+              }}
+              className="rounded-md bg-white px-3 py-1.5 font-medium shadow-sm hover:bg-neutral-50"
+            >
+              {t.upgrade}
+            </button>
+          ) : (
+            <span className="h-8" />
+          )}
         </div>
 
         <div className="mt-6 flex justify-end">

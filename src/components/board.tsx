@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, ArrowSquareOut, BoundingBox, Cards, Copy, Minus, PencilSimple, Plus, SelectionSlash, SpeakerHigh, Stop, Trash } from "@phosphor-icons/react";
+import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
@@ -25,11 +26,12 @@ import { MAX_CARDS } from "@/lib/limits";
 import { speak, speakingKey, stop, subscribeSpeech } from "@/lib/speech";
 import { type Account, type Arrangement, BoardMenu, hint, typing, useApple } from "./board-menu";
 import { CardMenu, type MenuItem } from "./card-menu";
-import { Composer, type Draft } from "./composer";
+import { Composer, type Draft, type Photos, shrink } from "./composer";
 import { Focus } from "./focus";
 import { MarkBar } from "./mark-bar";
+import { Paywall } from "./paywall";
 
-export type CardData = { id: string; title: string; body: string; tag: string | null; x: number; y: number; width: number; z: number; groupId: string | null; marks: Mark[] };
+export type CardData = { id: string; title: string; body: string; tag: string | null; x: number; y: number; width: number; z: number; groupId: string | null; marks: Mark[]; image: string | null };
 export type GroupData = { id: string; title: string; color: string | null; fill: boolean; fillOpacity: number }; // color: a name from COLORS; fillOpacity: percent
 type Field = "tag" | "title" | "body";
 type Patch = Partial<Omit<CardData, "id">>;
@@ -42,6 +44,10 @@ type Gesture = {
   ox: number;
   oy: number;
   ow: number;
+  minW?: number; // resize: the narrowest this card may get
+  edge?: Edge; // resize: which edge or corner is held
+  ratio?: number; // resize: width / height of a photo card, so its corners follow the diagonal too
+  oh?: number; // resize: height at the start (a photo's top corners keep its bottom in place)
   z: number;
   moved: boolean;
   hold?: Gesture; // touch on a card: pans unless the finger stays still long enough, then becomes this card move
@@ -51,10 +57,22 @@ type Gesture = {
   base?: Set<string>; // marquee: what was selected before (shift/⌘ adds to it)
   boxes?: { id: string; x: number; y: number; w: number; h: number }[]; // marquee: card rects, measured once
 };
+/** A resize handle: x = left (-1) or right (1) side; y = top (-1) / bottom (1) corner, 0 = the side edge. */
+type Edge = { x: -1 | 1; y: -1 | 0 | 1 };
+const EDGES: { edge: Edge; className: string }[] = [
+  { edge: { x: -1, y: 0 }, className: "top-0 -left-1.5 h-full w-3 cursor-ew-resize" },
+  { edge: { x: 1, y: 0 }, className: "top-0 -right-1.5 h-full w-3 cursor-ew-resize" },
+  { edge: { x: -1, y: -1 }, className: "-top-2 -left-2 size-4 cursor-nwse-resize" },
+  { edge: { x: 1, y: 1 }, className: "-bottom-2 -right-2 size-4 cursor-nwse-resize" },
+  { edge: { x: 1, y: -1 }, className: "-top-2 -right-2 size-4 cursor-nesw-resize" },
+  { edge: { x: -1, y: 1 }, className: "-bottom-2 -left-2 size-4 cursor-nesw-resize" },
+];
 const additive = (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => e.shiftKey || e.metaKey || e.ctrlKey;
 const HOLD_MS = 350;
 
 const CARD_WIDTH = 12 * GRID;
+const MIN_WIDTH = 7 * GRID; // text needs room to wrap
+const MIN_PHOTO_WIDTH = 4 * GRID; // a photo can shrink to a thumbnail
 const CARD_RADIUS = 6; // a group frame is rounded by this plus its padding, so the corners run parallel
 const GLIDE = "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)";
 const DOTS_GLIDE = ["background-size", "background-position"].map((p) => GLIDE.replace("transform", p)).join(", ");
@@ -87,10 +105,19 @@ function savedView(boardId: string): View | null {
   }
 }
 
-const patchFor = (g: Gesture, dx: number, dy: number, zoom: number): Patch =>
-  g.kind === "move"
-    ? { x: snap(g.ox + dx / zoom), y: snap(g.oy + dy / zoom), z: g.z }
-    : { width: Math.min(50 * GRID, Math.max(7 * GRID, snap(g.ox + g.ow + dx / zoom) - g.ox)) }; // right edge on a dot
+const patchFor = (g: Gesture, dx: number, dy: number, zoom: number): Patch => {
+  if (g.kind === "move") return { x: snap(g.ox + dx / zoom), y: snap(g.oy + dy / zoom), z: g.z };
+  const edge = g.edge ?? { x: 1, y: 0 };
+  let grow = (edge.x * dx) / zoom;
+  const along = g.ratio && edge.y ? ((edge.y * dy) / zoom) * g.ratio : 0; // a photo corner: whichever direction moved more
+  if (Math.abs(along) > Math.abs(grow)) grow = along;
+  const clamp = (w: number) => Math.min(50 * GRID, Math.max(g.minW ?? MIN_WIDTH, w));
+  // the moving edge lands on a dot; the opposite edge stays put
+  const width = edge.x === 1 ? clamp(snap(g.ox + g.ow + grow) - g.ox) : clamp(g.ox + g.ow - snap(g.ox - grow));
+  const patch: Patch = edge.x === 1 ? { width } : { width, x: g.ox + g.ow - width };
+  if (g.ratio && g.oh && edge.y === -1) patch.y = snap(g.oy + g.oh - width / g.ratio); // top corner of a photo: grows upwards
+  return patch;
+};
 
 export function Board({
   board,
@@ -99,6 +126,7 @@ export function Board({
   locale,
   account,
   languages,
+  photos,
   t,
 }: {
   board: { id: string; title: string };
@@ -107,6 +135,7 @@ export function Board({
   locale: Locale;
   account: Account;
   languages: Record<Locale, string>;
+  photos: { elsewhere: number; limit: number | null }; // photos on the account's other boards; limit null = none
   t: T;
 }) {
   const [cards, setCards] = useState(initialCards);
@@ -118,6 +147,8 @@ export function Board({
   const [editing, setEditing] = useState<{ id: string; field: Field } | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [focusOpen, setFocusOpen] = useState(false);
+  const [paywall, setPaywall] = useState(false);
+  const [dropping, setDropping] = useState(false); // image files dragged over the canvas
   const [composing, setComposing] = useState<{ at?: { x: number; y: number } } | null>(null); // new-card dialog; `at` = double-clicked world point
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null); // right-click menu, acts on the selection
   const [looking, setLooking] = useState<{ gid: string; x: number; y: number } | null>(null); // a group's colour picker
@@ -139,17 +170,19 @@ export function Board({
   const matches = (c: CardData) => !activeTag || c.tag === activeTag;
   const maxZ = Math.max(0, ...cards.map((c) => c.z));
   const picked = cards.filter((c) => selected.has(c.id));
+  const photoCount: Photos = { used: photos.elsewhere + new Set(cards.flatMap((c) => (c.image ? [c.image] : []))).size, limit: photos.limit };
   const v = view ?? { x: 0, y: 0, zoom: 1 };
 
   const failed = () => toast.error(t.saveFailed);
   const call = (p: Promise<boolean>) => p.then((ok) => ok || failed(), failed);
-  /** Optimistic insert; at the card limit the cards are taken back off the board. */
+  /** Optimistic insert; at the card or photo limit the cards are taken back off the board. */
   const insert = (list: CardData[]) =>
     createCardsAction(board.id, list).then((ok) => {
-      if (ok !== "limit") return ok || failed();
+      if (typeof ok === "boolean") return ok || failed();
       const ids = new Set(list.map((c) => c.id));
       setCards((cs) => cs.filter((c) => !ids.has(c.id)));
-      toast.error(fill(t.cardLimit, { n: MAX_CARDS.toLocaleString() }));
+      if (ok === "photos") setPaywall(true);
+      else toast.error(fill(t.cardLimit, { n: MAX_CARDS.toLocaleString() }));
     }, failed);
   const save = (id: string, patch: Patch) => {
     setCards((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -237,9 +270,37 @@ export function Board({
     const p = toWorld(v, innerWidth / 2, innerHeight / 2);
     return { x: p.x - CARD_WIDTH / 2, y: p.y - 4 * GRID };
   };
-  const add = (d: Draft, at?: { x: number; y: number }) => {
+  /** A photo goes straight from the browser to Vercel Blob (src/app/api/photo/route.ts checks the limit), then the card is saved with its URL. */
+  const addPhoto = ({ file, ...d }: Draft & { file: File }, at?: { x: number; y: number }) => {
+    const id = toast.loading(t.uploading);
+    shrink(file)
+      .then((f) => upload(`photos/${f.name}`, f, { access: "public", handleUploadUrl: "/api/photo", contentType: f.type }))
+      .then(
+        (blob) => {
+          toast.success(t.uploaded, { id });
+          add(d, at, blob.url);
+        },
+        (e: unknown) => {
+          toast.dismiss(id);
+          if (e instanceof Error && e.message.includes("limit")) setPaywall(true);
+          else toast.error(t.uploadFailed);
+        },
+      );
+  };
+  /** Files dropped on the canvas: photo cards where they were dropped, fanned out a little; only as many as the limit leaves. */
+  const dropPhotos = (files: File[], sx: number, sy: number) => {
+    const images = files.filter((f) => /^image\/(jpeg|png|webp|gif)$/.test(f.type));
+    if (!images.length) return void (files.length && toast.error(t.uploadFailed));
+    const room = photoCount.limit === null ? images.length : photoCount.limit - photoCount.used;
+    if (room <= 0) return setPaywall(true);
+    const p = toWorld(v, sx, sy);
+    images.slice(0, room).forEach((file, i) => addPhoto({ tag: null, title: "", body: "", file }, { x: p.x - CARD_WIDTH / 2 + i * 2 * GRID, y: p.y - 3 * GRID + i * 2 * GRID }));
+    if (images.length > room) setPaywall(true);
+  };
+  const add = ({ file, ...d }: Draft, at?: { x: number; y: number }, image: string | null = null) => {
+    if (file) return addPhoto({ ...d, file }, at);
     const spot = spotFor(d, at);
-    const card: CardData = { id: crypto.randomUUID(), ...d, x: snap(spot.x), y: snap(spot.y), width: CARD_WIDTH, z: maxZ + 1, groupId: null, marks: [] };
+    const card: CardData = { id: crypto.randomUUID(), ...d, x: snap(spot.x), y: snap(spot.y), width: CARD_WIDTH, z: maxZ + 1, groupId: null, marks: [], image };
     setCards((cs) => [...cs, card]);
     setSelected(new Set([card.id]));
     insert([card]);
@@ -367,12 +428,16 @@ export function Board({
     setSelected(ids);
     gesture.current = dragAll(e, ids);
   };
-  const startCard = (e: React.PointerEvent, card: CardData, kind: "move" | "resize") => {
+  const startCard = (e: React.PointerEvent, card: CardData, kind: "move" | "resize", edge?: Edge) => {
     if (e.button !== 0) return;
     e.stopPropagation();
     const field = ((e.target as HTMLElement).closest("[data-field]") as HTMLElement | null)?.dataset.field as Field | undefined;
     if (kind === "move" && editing?.id === card.id && field) return; // selecting text
-    const move: Gesture = { kind, id: card.id, sx: e.clientX, sy: e.clientY, ox: card.x, oy: card.y, ow: card.width, z: cards.some((c) => c.id !== card.id && c.z >= card.z) ? maxZ + 1 : card.z, moved: false };
+    const move: Gesture = { kind, id: card.id, sx: e.clientX, sy: e.clientY, ox: card.x, oy: card.y, ow: card.width, minW: card.image ? MIN_PHOTO_WIDTH : MIN_WIDTH, z: cards.some((c) => c.id !== card.id && c.z >= card.z) ? maxZ + 1 : card.z, moved: false, edge };
+    if (kind === "resize" && card.image) {
+      move.oh = height(card);
+      move.ratio = card.width / move.oh;
+    }
     if (e.pointerType !== "touch" || kind === "resize") {
       // A plain press selects the card, or its whole group, and keeps a bigger selection so it can be dragged as one.
       // shift/⌘ toggles just this card (so ⌘-click picks one card out of a group).
@@ -629,6 +694,19 @@ export function Board({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         onDoubleClick={onDoubleClick}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault(); // allows the drop
+          e.dataTransfer.dropEffect = "copy";
+          setDropping(true);
+        }}
+        onDragLeave={(e) => e.currentTarget.contains(e.relatedTarget as Node | null) || setDropping(false)}
+        onDrop={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault(); // otherwise the browser opens the file
+          setDropping(false);
+          dropPhotos([...e.dataTransfer.files], e.clientX, e.clientY);
+        }}
       >
         <div className="absolute top-0 left-0 origin-top-left" style={{ transform: `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`, transition: glide ? GLIDE : undefined, visibility: view ? undefined : "hidden" }}>
           {/* Frames read card heights from the DOM, so only in the browser once the view is set (it is null on the server and
@@ -705,7 +783,7 @@ export function Board({
               selected={selected.has(card.id)}
               dim={!matches(card)}
               editingField={editing?.id === card.id ? editing.field : null}
-              onPointerDown={(e, kind) => startCard(e, card, kind)}
+              onPointerDown={(e, kind, edge) => startCard(e, card, kind, edge)}
               onEdit={(field) => setEditing({ id: card.id, field })}
               onSelect={() => setSelected(new Set([card.id]))}
               onMenu={(x, y) => {
@@ -720,6 +798,7 @@ export function Board({
             />
           ))}
         </div>
+        {dropping && <div className="pointer-events-none absolute inset-3 rounded-2xl border-2 border-dashed border-cork bg-cork/5" aria-hidden />}
         {box && <div className="pointer-events-none absolute rounded-sm border border-cork bg-cork/10" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} />}
         {!cards.length && <p className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-neutral-500">{t.emptyHint}</p>}
       </div>
@@ -776,13 +855,16 @@ export function Board({
         </button>
       </div>
 
-      <BoardMenu account={account} boardId={board.id} locale={locale} languages={languages} t={t.menu} onArrange={arrange} />
+      <BoardMenu account={account} boardId={board.id} locale={locale} languages={languages} photos={photoCount} t={t.menu} onArrange={arrange} onUpgrade={() => setPaywall(true)} />
       {menu && <CardMenu at={menu} items={menuItems()} onClose={() => setMenu(null)} />}
       {looking && groups.some((g) => g.id === looking.gid) && (
         <GroupLook at={looking} group={groups.find((g) => g.id === looking.gid)!} t={t} onChange={(p) => updateGroup(looking.gid, p)} onClose={() => setLooking(null)} />
       )}
       {editing && <MarkBar cardId={editing.id} t={t} onApply={applyMark} />}
-      {composing && <Composer tags={tags} tag={activeTag} t={t} onAdd={(d) => add(d, composing.at)} onClose={() => setComposing(null)} />}
+      {composing && (
+        <Composer tags={tags} tag={activeTag} t={t} photos={photoCount} onAdd={(d) => add(d, composing.at)} onPaywall={() => setPaywall(true)} onClose={() => setComposing(null)} />
+      )}
+      {paywall && <Paywall t={t} onClose={() => setPaywall(false)} />}
       {focusOpen && <Focus cards={ordered.filter(matches)} t={t.focus} untitled={t.untitledCard} onClose={() => setFocusOpen(false)} />}
     </>
   );
@@ -812,7 +894,7 @@ function CardView({
   selected: boolean;
   dim: boolean;
   editingField: Field | null;
-  onPointerDown: (e: React.PointerEvent, kind: "move" | "resize") => void;
+  onPointerDown: (e: React.PointerEvent, kind: "move" | "resize", edge?: Edge) => void;
   onEdit: (field: Field) => void;
   onSelect: () => void;
   onMenu: (x: number, y: number) => void;
@@ -891,7 +973,7 @@ function CardView({
       id={`card-${card.id}`}
       ref={root}
       tabIndex={0}
-      aria-label={fill(t.card, { title: card.title || t.untitledCard })}
+      aria-label={fill(t.card, { title: card.title || (card.image ? t.photo : t.untitledCard) })}
       aria-description={t.cardHelp}
       style={{ left: card.x, top: card.y, width: card.width, zIndex: card.z, borderRadius: CARD_RADIUS }}
       className={`group absolute bg-white transition-[box-shadow,opacity] outline-none ${
@@ -911,7 +993,7 @@ function CardView({
       }}
       onBlur={(e) => {
         if (!editing || e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        onDone((["tag", "title", "body"] as const).every((f) => !fieldEl(f)?.innerText.trim()));
+        onDone(!card.image && (["tag", "title", "body"] as const).every((f) => !fieldEl(f)?.innerText.trim()));
       }}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget || e.key !== "Enter") return; // Delete, arrows, ⌘D: board shortcuts on the selection
@@ -919,10 +1001,25 @@ function CardView({
         onEdit("title");
       }}
     >
-      <div ref={inner} className="px-4.5 pt-4 pb-5">
-      {text("tag", card.tag ?? "", "mb-1.5 pr-5 text-[10px] font-medium tracking-[.08em] text-neutral-500 uppercase", t.tagPlaceholder)}
-      {text("title", card.title, "pr-5 font-serif text-[15px] leading-snug font-bold text-ink", t.titlePlaceholder)}
-      {text("body", card.body, "mt-2 text-[13px] leading-relaxed text-neutral-700", t.bodyPlaceholder)}
+      <div ref={inner}>
+        {card.image && (
+          // eslint-disable-next-line @next/next/no-img-element -- already resized before upload; next/image would re-fetch it at every zoom
+          <img
+            src={card.image}
+            alt={card.title || t.photo}
+            loading="lazy"
+            draggable={false}
+            className="block w-full select-none"
+            style={{ borderRadius: editing || card.tag || card.title || card.body ? `${CARD_RADIUS}px ${CARD_RADIUS}px 0 0` : CARD_RADIUS }}
+          />
+        )}
+        {(editing || !card.image || card.tag || card.title || card.body) && (
+          <div className={`px-4.5 pb-5 ${card.image ? "pt-3" : "pt-4"}`}>
+            {text("tag", card.tag ?? "", "mb-1.5 pr-5 text-[10px] font-medium tracking-[.08em] text-neutral-500 uppercase", t.tagPlaceholder)}
+            {text("title", card.title, "pr-5 font-serif text-[15px] leading-snug font-bold text-ink", t.titlePlaceholder)}
+            {text("body", card.body, "mt-2 text-[13px] leading-relaxed text-neutral-700", t.bodyPlaceholder)}
+          </div>
+        )}
       </div>
       {(card.title || card.body) && (
         <button
@@ -938,7 +1035,9 @@ function CardView({
           {reading ? <Stop weight="fill" className="size-3" aria-hidden /> : <SpeakerHigh className="size-3" aria-hidden />}
         </button>
       )}
-      <div aria-hidden title={t.resize} onPointerDown={(e) => onPointerDown(e, "resize")} className="absolute top-0 -right-1.5 h-full w-3 cursor-ew-resize" />
+      {EDGES.map(({ edge, className }) => (
+        <div key={`${edge.x}${edge.y}`} aria-hidden title={t.resize} onPointerDown={(e) => onPointerDown(e, "resize", edge)} className={`absolute ${className}`} />
+      ))}
     </div>
   );
 }

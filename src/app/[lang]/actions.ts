@@ -7,9 +7,9 @@ import { z } from "zod";
 import { signOut } from "@/auth";
 import { db } from "@/db";
 import { boards, cardGroups, cards, users } from "@/db/schema";
-import { requireBoard, requireUser } from "@/lib/auth-guard";
+import { photoQuota, requireBoard, requireUser } from "@/lib/auth-guard";
 import { ICON_NAMES, TINT_NAMES } from "@/lib/board-look";
-import { MAX_BOARDS, MAX_CARDS } from "@/lib/limits";
+import { isOurPhoto, MAX_BOARDS, MAX_CARDS } from "@/lib/limits";
 import { COLORS } from "@/lib/marks";
 
 // Session + validation at the trust boundary. Card actions return false instead of throwing,
@@ -25,11 +25,15 @@ const cardFields = z.object({
   tag: z.string().trim().max(40).nullable(),
   x: coord,
   y: coord,
-  width: z.number().int().min(160).max(1_200),
+  width: z.number().int().min(96).max(1_200), // 96: a photo thumbnail (MIN_PHOTO_WIDTH in board.tsx); text cards stop at 168 in the UI
   z: z.number().int().min(0).max(1_000_000_000),
   marks: z.array(mark).max(200),
 });
-const newCard = cardFields.extend({ id: z.uuid(), groupId: z.uuid().nullable().optional() }); // groupId: undo puts a card back in its frame
+const newCard = cardFields.extend({
+  id: z.uuid(),
+  groupId: z.uuid().nullable().optional(), // undo puts a card back in its frame
+  image: z.string().max(2_000).refine((u) => isOurPhoto(u)).nullable().optional(), // set on insert only, never changed by updates
+});
 const boardTitle = z.string().trim().min(1).max(120);
 
 const ownBoards = (userId: string) => db.select({ id: boards.id }).from(boards).where(eq(boards.userId, userId));
@@ -85,12 +89,21 @@ export async function deleteBoardAction(id: string) {
 
 const newCards = z.array(newCard).min(1).max(500);
 
-/** New cards, duplicates, and "undo" after a delete (the client sends the cards back with their old ids). "limit" = MAX_CARDS reached. */
-export async function createCardsAction(boardId: string, list: z.input<typeof newCards>): Promise<boolean | "limit"> {
+/** New cards, duplicates, and "undo" after a delete (the client sends the cards back with their old ids).
+ * "limit" = MAX_CARDS reached, "photos" = the photo limit (src/lib/limits.ts) would be passed. */
+export async function createCardsAction(boardId: string, list: z.input<typeof newCards>): Promise<boolean | "limit" | "photos"> {
   const board = await requireBoard(boardId);
   const parsed = newCards.safeParse(list);
   if (!parsed.success) return false;
   if ((await cardCount(board.userId)) + parsed.data.length > MAX_CARDS) return "limit";
+  const images = [...new Set(parsed.data.flatMap((c) => (c.image ? [c.image] : [])))];
+  if (images.length) {
+    // a duplicate reuses a photo that is already counted; only photos new to this account take a slot
+    const kept = await db.select({ image: cards.image }).from(cards).where(and(inArray(cards.boardId, ownBoards(board.userId)), inArray(cards.image, images)));
+    const fresh = images.filter((u) => !kept.some((k) => k.image === u)).length;
+    const { used, limit } = await photoQuota(board.userId);
+    if (fresh && limit !== null && used + fresh > limit) return "photos";
+  }
   const own = new Set((await db.select({ id: cardGroups.id }).from(cardGroups).where(eq(cardGroups.boardId, board.id))).map((g) => g.id));
   await db
     .insert(cards)
