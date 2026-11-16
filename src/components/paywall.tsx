@@ -42,8 +42,8 @@ const mascotIn: Variants = {
 
 // The photo limit's plans page: Free (current) next to Pro. Payments aren't open yet, so Pro's button stays locked;
 // when they are, it becomes a link to the checkout (monthly or yearly variant) with the user id attached.
-// Always light (cream + Pro yellow), like a printed poster, in both themes. It scrolls on short screens without a
-// scrollbar: a native one runs down the rounded edge and looks cut off.
+// Always light (cream + Pro yellow), like a printed poster, in both themes (.always-light in globals.css).
+// It scrolls on short screens without a scrollbar: a native one runs down the rounded edge and looks cut off.
 export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [yearly, setYearly] = useState(false);
@@ -77,7 +77,7 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
       aria-labelledby="paywall-title"
       aria-describedby="paywall-body"
       style={{ backgroundImage: NOISE }}
-      className="m-auto max-h-[calc(100dvh-1.5rem)] w-[min(56rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-[28px] [scrollbar-width:none] bg-[#f7efe3] p-4 text-neutral-900 shadow-2xl backdrop:bg-black/50 backdrop:animate-[backdrop-in_.3s_ease-out] motion-reduce:backdrop:animate-none sm:p-6"
+      className="always-light m-auto max-h-[calc(100dvh-1.5rem)] w-[min(56rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-[28px] [scrollbar-width:none] bg-[#f7efe3] p-4 text-neutral-900 shadow-2xl backdrop:bg-black/50 backdrop:animate-[backdrop-in_.3s_ease-out] motion-reduce:backdrop:animate-none sm:p-6"
     >
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 text-lg font-bold tracking-tight">
