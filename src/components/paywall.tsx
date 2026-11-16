@@ -19,7 +19,8 @@ const PRICES = {
 
 // The photo limit's plans page: Free (current) next to Pro. Payments aren't open yet, so Pro's button stays locked;
 // when they are, it becomes a link to the checkout (monthly or yearly variant) with the user id attached.
-// Always light (cream + Pro yellow), like a printed poster, in both themes.
+// Always light (cream + Pro yellow), like a printed poster, in both themes. It scrolls on short screens without a
+// scrollbar: a native one runs down the rounded edge and looks cut off.
 export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [yearly, setYearly] = useState(false);
@@ -36,7 +37,7 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
       aria-labelledby="paywall-title"
       aria-describedby="paywall-body"
       style={{ backgroundImage: NOISE }}
-      className="m-auto max-h-[calc(100dvh-1.5rem)] w-[min(56rem,calc(100vw-1.5rem))] overflow-y-auto rounded-[28px] bg-[#f7efe3] p-4 text-neutral-900 shadow-2xl backdrop:bg-black/50 sm:p-6"
+      className="m-auto max-h-[calc(100dvh-1.5rem)] w-[min(56rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-[28px] [scrollbar-width:none] bg-[#f7efe3] p-4 text-neutral-900 shadow-2xl backdrop:bg-black/50 sm:p-6"
     >
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 text-lg font-bold tracking-tight">
@@ -60,16 +61,17 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
         <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <span />
           <Toggle label={t.yearly} on={yearly} set={setYearly} options={[t.monthly, <>{t.yearly}<span className="rounded-full bg-[#FECF39] px-2 py-0.5 text-xs font-semibold text-neutral-900">{t.yearlySave}</span></>]} />
-          <div className="justify-self-end">
+          {/* phones: no room beside the period toggle, so it moves up next to the close button */}
+          <div className="justify-self-end max-sm:absolute max-sm:top-3.5 max-sm:right-14">
             <Currency label={t.currency} usd={usd} set={setUsd} />
           </div>
         </div>
       </div>
 
       {/* subgrid: both cards share the rows, so titles, prices, lists and buttons line up across them */}
-      <div className="mt-6 grid grid-rows-[auto_auto_1fr_auto] gap-x-3 sm:grid-cols-[2fr_3fr]">
-        <section aria-label={t.freeName} className="row-span-4 grid grid-rows-subgrid rounded-[22px] bg-[#ead7b9] p-6 shadow-[0_1px_0_rgba(255,255,255,.6)_inset,0_8px_24px_-12px_rgba(80,50,20,.35)] max-sm:mb-3">
-          <h3 className="self-end text-4xl font-extrabold tracking-tight">{t.freeName}</h3>
+      <div className="mt-6 grid grid-rows-[auto_auto_1fr_auto] gap-x-3 md:grid-cols-[2fr_3fr]">
+        <section aria-label={t.freeName} className="row-span-4 grid grid-rows-subgrid rounded-[22px] bg-[#ead7b9] p-5 sm:p-6 shadow-[0_1px_0_rgba(255,255,255,.6)_inset,0_8px_24px_-12px_rgba(80,50,20,.35)]">
+          <h3 className="self-end text-3xl font-extrabold sm:text-4xl tracking-tight">{t.freeName}</h3>
           <Price value={price.sign + price.free} per={per} />
           <Perks list={fill(t.freePerks, { n: MAX_PHOTOS_FREE, boards: n(MAX_BOARDS), cards: n(MAX_CARDS) })} />
           <button disabled className="h-12 w-full rounded-xl border-2 border-neutral-900 font-semibold">
@@ -77,12 +79,13 @@ export function Paywall({ t, onClose }: { t: T; onClose: () => void }) {
           </button>
         </section>
 
-        <section aria-label="Pro" className="relative row-span-4 grid grid-rows-subgrid overflow-hidden rounded-[22px] bg-[#FECF39] p-6 shadow-[0_1px_0_rgba(255,255,255,.6)_inset,0_8px_24px_-12px_rgba(80,50,20,.35)]">
+        {/* phones and small tablets: Pro stacks first so the offer is on screen without scrolling */}
+        <section aria-label="Pro" className="relative row-span-4 grid grid-rows-subgrid overflow-hidden rounded-[22px] bg-[#FECF39] p-5 sm:p-6 shadow-[0_1px_0_rgba(255,255,255,.6)_inset,0_8px_24px_-12px_rgba(80,50,20,.35)] max-md:order-first max-md:mb-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- static artwork */}
-          <img src="/pro-mascot.webp" alt="" width={600} height={548} className="pointer-events-none absolute top-12 right-2 w-[50%] max-w-72 -rotate-3" />
+          <img src="/pro-mascot.webp" alt="" width={600} height={548} className="pointer-events-none absolute top-3 right-2 w-[38%] max-w-56 -rotate-3 md:top-12 md:w-[40%] md:max-w-72 lg:w-[50%]" />
           <h3 className="relative">
             {/* eslint-disable-next-line @next/next/no-img-element -- static artwork */}
-            <img src="/pro-wordmark.webp" alt="Pro" width={560} height={190} className="h-16 w-auto" />
+            <img src="/pro-wordmark.webp" alt="Pro" width={560} height={190} className="h-12 w-auto sm:h-16" />
           </h3>
           <Price value={price.sign + (yearly ? price.year : price.month)} per={per} />
           <Perks list={fill(t.proPerks, { n: n(MAX_PHOTOS_PRO) })} />
@@ -192,7 +195,7 @@ function Currency({ label, usd, set }: { label: string; usd: boolean; set: (usd:
           aria-pressed={usd === !!i}
           aria-label={i ? "USD" : "TL"}
           onClick={() => set(!!i)}
-          className={`relative grid size-10 place-items-center rounded-xl text-lg font-bold transition-colors duration-300 ${usd === !!i ? "text-neutral-900" : "text-neutral-500 hover:text-neutral-800"}`}
+          className={`relative grid size-8 place-items-center rounded-xl text-base sm:size-10 sm:text-lg font-bold transition-colors duration-300 ${usd === !!i ? "text-neutral-900" : "text-neutral-500 hover:text-neutral-800"}`}
         >
           {sign}
         </button>
